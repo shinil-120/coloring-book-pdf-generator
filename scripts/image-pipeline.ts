@@ -299,59 +299,9 @@ export async function generatePlaceholderLineArt(
   item: string,
   category: string
 ): Promise<void> {
-  // Deterministic seed from name
-  let seed = 0;
-  for (let i = 0; i < item.length; i++) seed = (seed * 31 + item.charCodeAt(i)) >>> 0;
-  const rng = () => {
-    seed = (seed * 1664525 + 1013904223) >>> 0;
-    return seed / 0xffffffff;
-  };
-
-  const size = 1024;
-  // Build an SVG with a few overlapping rounded shapes + a label,
-  // thick black strokes on white. This gives the flood-fill something
-  // meaningful to colorize.
-  const shapes: string[] = [];
-  const numShapes = 3 + Math.floor(rng() * 3); // 3-5 shapes
-
-  for (let i = 0; i < numShapes; i++) {
-    const cx = 200 + rng() * 624;
-    const cy = 200 + rng() * 624;
-    const rx = 100 + rng() * 180;
-    const ry = 100 + rng() * 180;
-    const rot = rng() * 360;
-    if (rng() > 0.5) {
-      shapes.push(
-        `<ellipse cx="${cx.toFixed(0)}" cy="${cy.toFixed(0)}" rx="${rx.toFixed(0)}" ry="${ry.toFixed(0)}" fill="white" stroke="black" stroke-width="${(18 + rng() * 10).toFixed(0)}" transform="rotate(${rot.toFixed(0)} ${cx.toFixed(0)} ${cy.toFixed(0)})"/>`
-      );
-    } else {
-      const r = Math.min(rx, ry);
-      shapes.push(
-        `<circle cx="${cx.toFixed(0)}" cy="${cy.toFixed(0)}" r="${r.toFixed(0)}" fill="white" stroke="black" stroke-width="${(18 + rng() * 10).toFixed(0)}"/>`
-      );
-    }
-  }
-
-  // A big central body shape so the largest region is the "body"
-  shapes.push(
-    `<ellipse cx="512" cy="512" rx="320" ry="300" fill="white" stroke="black" stroke-width="22"/>`
-  );
-  // Eyes
-  shapes.push(`<circle cx="430" cy="440" r="34" fill="white" stroke="black" stroke-width="14"/>`);
-  shapes.push(`<circle cx="594" cy="440" r="34" fill="white" stroke="black" stroke-width="14"/>`);
-  shapes.push(`<circle cx="430" cy="440" r="12" fill="black"/>`);
-  shapes.push(`<circle cx="594" cy="440" r="12" fill="black"/>`);
-  // Smile
-  shapes.push(
-    `<path d="M 420 600 Q 512 680 604 600" fill="none" stroke="black" stroke-width="14" stroke-linecap="round"/>`
-  );
-
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
-    <rect width="${size}" height="${size}" fill="white"/>
-    ${shapes.join("\n    ")}
-    <text x="512" y="980" text-anchor="middle" font-family="Arial, sans-serif" font-size="42" font-weight="bold" fill="#333">${escapeXml(item)}</text>
-  </svg>`;
-
+  // Use category-specific SVG silhouettes for recognizable, colorizable art.
+  const { generateSilhouetteSvg } = await import("./silhouettes");
+  const svg = generateSilhouetteSvg(item, category);
   await sharp(Buffer.from(svg)).png().toFile(outPath);
 }
 

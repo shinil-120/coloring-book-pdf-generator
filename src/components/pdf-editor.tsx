@@ -42,6 +42,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { getCategoryTheme } from "@/lib/coloring-data";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -594,14 +595,17 @@ function SelectStep({
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
           {books.map((book, idx) => {
             const isLoading = loadingBook === book.slug;
+            const theme = getCategoryTheme(book.category);
             return (
               <button
                 key={book.slug ?? idx}
                 onClick={() => onSelect(book)}
                 disabled={!!loadingBook}
-                className="group relative flex flex-col gap-2 rounded-2xl border border-stone-200 bg-white p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-violet-300 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60"
+                className={`group relative flex flex-col gap-2 overflow-hidden rounded-2xl border border-stone-200 bg-white p-4 text-left shadow-sm transition-all hover:-translate-y-0.5 hover:border-violet-300 hover:shadow-md disabled:cursor-not-allowed disabled:opacity-60 animate-fade-in-up stagger-${(idx % 6) + 1}`}
               >
-                <div className="flex items-start justify-between gap-2">
+                {/* themed top accent */}
+                <div className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${theme.gradient}`} />
+                <div className="mt-1 flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <div className="truncate text-sm font-extrabold text-stone-800">
                       {book.name}
@@ -612,8 +616,9 @@ function SelectStep({
                   </div>
                   <Badge
                     variant="outline"
-                    className="shrink-0 rounded-full border-violet-200 bg-violet-50 text-[10px] font-bold text-violet-600"
+                    className={`shrink-0 gap-1 rounded-full border ${theme.badgeBg} ${theme.badgeText} text-[10px] font-bold`}
                   >
+                    <span className="text-xs leading-none">{theme.emoji}</span>
                     {book.category}
                   </Badge>
                 </div>
@@ -681,53 +686,54 @@ function SortablePageCard({
       className={
         "group relative flex flex-col rounded-2xl border bg-white p-2.5 shadow-sm transition-all " +
         (isDragging
-          ? "border-violet-400 shadow-lg ring-2 ring-violet-200"
-          : "border-stone-200 hover:border-stone-300 hover:shadow-md") +
+          ? "border-violet-400 shadow-xl ring-2 ring-violet-300 scale-105 z-50"
+          : "border-stone-200 hover:border-violet-300 hover:shadow-md") +
         (page.isBlank ? " border-dashed" : "")
       }
     >
-      {/* Page number badge */}
+      {/* Page number badge — larger, more prominent */}
       <div
         className={
-          "absolute -left-1.5 -top-1.5 z-10 flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-extrabold text-white shadow-sm ring-2 ring-white " +
+          "absolute -left-2 -top-2 z-10 flex h-8 w-8 items-center justify-center rounded-full text-xs font-extrabold text-white shadow-md ring-2 ring-white transition-transform group-hover:scale-110 " +
           (page.isBlank
-            ? "bg-stone-400"
+            ? "bg-gradient-to-br from-stone-400 to-stone-500"
             : "bg-gradient-to-br from-pink-400 to-rose-500")
         }
+        title={page.isBlank ? `Blank page ${position}` : `Page ${position}`}
       >
         {position}
       </div>
 
-      {/* Drag handle */}
+      {/* Drag handle — larger, always visible, on the right */}
       <button
         ref={setActivatorNodeRef}
         {...attributes}
         {...listeners}
         aria-label="Drag to reorder"
-        className="absolute -right-1.5 -top-1.5 z-10 flex h-6 w-6 cursor-grab items-center justify-center rounded-full bg-white text-stone-400 shadow-sm ring-2 ring-white transition-colors hover:text-violet-500 active:cursor-grabbing"
+        className="absolute -right-2 -top-2 z-10 flex h-8 w-8 cursor-grab items-center justify-center rounded-full bg-white text-stone-500 shadow-md ring-2 ring-white transition-all hover:bg-violet-50 hover:text-violet-600 active:cursor-grabbing group-hover:scale-110"
       >
-        <GripVertical className="h-3.5 w-3.5" />
+        <GripVertical className="h-4 w-4" />
       </button>
 
       <PageCardVisual page={page} position={position} />
 
-      {/* Action buttons */}
-      <div className="mt-2 flex items-center gap-1.5">
+      {/* Action buttons — always visible on mobile, hover-reveal on desktop */}
+      <div className="mt-2 flex items-center gap-1.5 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100">
         <Button
           onClick={onDuplicate}
           size="sm"
-          className="h-7 flex-1 gap-1 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 px-2 text-[10px] font-bold text-white shadow-sm hover:from-emerald-600 hover:to-teal-600"
+          className="h-8 flex-1 gap-1 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 px-2 text-[11px] font-bold text-white shadow-sm transition-all hover:from-emerald-600 hover:to-teal-600 hover:shadow-md"
         >
           <Copy className="h-3 w-3" />
-          Dup
+          Copy
         </Button>
         <Button
           onClick={onDelete}
           size="sm"
-          className="h-7 flex-1 gap-1 rounded-full bg-gradient-to-r from-red-500 to-rose-500 px-2 text-[10px] font-bold text-white shadow-sm hover:from-red-600 hover:to-rose-600"
+          className="h-8 flex-1 gap-1 rounded-full bg-gradient-to-r from-red-500 to-rose-500 px-2 text-[11px] font-bold text-white shadow-sm transition-all hover:from-red-600 hover:to-rose-600 hover:shadow-md"
         >
           <Trash2 className="h-3 w-3" />
-          Del
+          Delete
         </Button>
       </div>
     </div>

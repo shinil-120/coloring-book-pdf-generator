@@ -120,3 +120,120 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* ────────────────────────────────────────────────────────────────────────
+   Hide the Next.js dev tools indicator (the floating "N" badge) in dev mode.
+   It overlaps our sticky header and looks like a stray UI element.
+   ──────────────────────────────────────────────────────────────────────── */
+next-dev-tools-badge,
+[data-nextjs-dev-tools-badge],
+#nextjs__dev_tools,
+[class*="nextjs-dev-tools"],
+nextjs-portal {
+  display: none !important;
+}
+
+/* ────────────────────────────────────────────────────────────────────────
+   Custom scrollbar styling — soft, kid-friendly scrollbars.
+   ──────────────────────────────────────────────────────────────────────── */
+.scroll-pretty {
+  scrollbar-width: thin;
+  scrollbar-color: #f9a8d4 transparent;
+}
+.scroll-pretty::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.scroll-pretty::-webkit-scrollbar-track {
+  background: transparent;
+}
+.scroll-pretty::-webkit-scrollbar-thumb {
+  background-color: #fbcfe8;
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+.scroll-pretty::-webkit-scrollbar-thumb:hover {
+  background-color: #f9a8d4;
+  background-clip: padding-box;
+}
+
+/* Page-wide scrollbar */
+::-webkit-scrollbar {
+  width: 12px;
+  height: 12px;
+}
+::-webkit-scrollbar-track {
+  background: #fdf2f8;
+}
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #f9a8d4, #f0abfc);
+  border-radius: 9999px;
+  border: 3px solid #fdf2f8;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #f472b6, #e879f9);
+}
+
+/* ────────────────────────────────────────────────────────────────────────
+   Subtle entrance animation for cards & grid items.
+   ──────────────────────────────────────────────────────────────────────── */
+@keyframes fade-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.animate-fade-in-up {
+  animation: fade-in-up 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+@keyframes pop-in {
+  0% {
+    opacity: 0;
+    transform: scale(0.92);
+  }
+  60% {
+    transform: scale(1.03);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+.animate-pop-in {
+  animation: pop-in 0.35s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* Stagger helpers */
+.stagger-1 { animation-delay: 0.05s; }
+.stagger-2 { animation-delay: 0.1s; }
+.stagger-3 { animation-delay: 0.15s; }
+.stagger-4 { animation-delay: 0.2s; }
+.stagger-5 { animation-delay: 0.25s; }
+.stagger-6 { animation-delay: 0.3s; }
+
+/* Shimmer for skeleton loading */
+@keyframes shimmer {
+  0% { background-position: -1000px 0; }
+  100% { background-position: 1000px 0; }
+}
+.shimmer {
+  background: linear-gradient(
+    90deg,
+    rgba(241, 245, 249, 0.6) 0%,
+    rgba(249, 209, 232, 0.4) 50%,
+    rgba(241, 245, 249, 0.6) 100%
+  );
+  background-size: 1000px 100%;
+  animation: shimmer 2s infinite linear;
+}
+
+/* Drag-active cursor */
+.dragging-cursor * {
+  cursor: grabbing !important;
+}

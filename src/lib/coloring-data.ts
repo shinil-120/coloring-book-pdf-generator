@@ -575,3 +575,89 @@ export const PAGE_NUM_Y = 740;       // bottom-right
 // Blank page size (used by assemble-pdf when -1 appears in pageOrder)
 export const BLANK_PAGE_WIDTH = 612;
 export const BLANK_PAGE_HEIGHT = 792;
+
+// ---------------------------------------------------------------------------
+// CATEGORY VISUAL THEMES — consistent gradient + badge color per category,
+// used across Tab 1 book cards, Tab 2 select buttons, and the info box.
+// ---------------------------------------------------------------------------
+export interface CategoryTheme {
+  gradient: string;       // tailwind gradient classes for top bar / accents
+  badgeBg: string;        // badge background
+  badgeText: string;      // badge text color
+  emoji: string;          // category emoji
+}
+
+const CATEGORY_THEMES: Record<string, CategoryTheme> = {
+  Dinosaurs: {
+    gradient: "from-emerald-400 to-teal-500",
+    badgeBg: "bg-emerald-50 border-emerald-200",
+    badgeText: "text-emerald-700",
+    emoji: "🦕",
+  },
+  Dragons: {
+    gradient: "from-violet-400 to-purple-500",
+    badgeBg: "bg-violet-50 border-violet-200",
+    badgeText: "text-violet-700",
+    emoji: "🐉",
+  },
+  "Ocean Animals": {
+    gradient: "from-sky-400 to-blue-500",
+    badgeBg: "bg-sky-50 border-sky-200",
+    badgeText: "text-sky-700",
+    emoji: "🐳",
+  },
+  Vehicles: {
+    gradient: "from-orange-400 to-amber-500",
+    badgeBg: "bg-orange-50 border-orange-200",
+    badgeText: "text-orange-700",
+    emoji: "🚗",
+  },
+  Flowers: {
+    gradient: "from-pink-400 to-rose-500",
+    badgeBg: "bg-pink-50 border-pink-200",
+    badgeText: "text-pink-700",
+    emoji: "🌸",
+  },
+  Insects: {
+    gradient: "from-lime-400 to-green-500",
+    badgeBg: "bg-lime-50 border-lime-200",
+    badgeText: "text-lime-700",
+    emoji: "🦋",
+  },
+  "Wild Animals": {
+    gradient: "from-amber-400 to-orange-500",
+    badgeBg: "bg-amber-50 border-amber-200",
+    badgeText: "text-amber-700",
+    emoji: "🦁",
+  },
+  "Fantasy Creatures": {
+    gradient: "from-fuchsia-400 to-pink-500",
+    badgeBg: "bg-fuchsia-50 border-fuchsia-200",
+    badgeText: "text-fuchsia-700",
+    emoji: "🦄",
+  },
+  Space: {
+    gradient: "from-indigo-400 to-violet-500",
+    badgeBg: "bg-indigo-50 border-indigo-200",
+    badgeText: "text-indigo-700",
+    emoji: "🚀",
+  },
+  "Food & Sweets": {
+    gradient: "from-rose-400 to-red-500",
+    badgeBg: "bg-rose-50 border-rose-200",
+    badgeText: "text-rose-700",
+    emoji: "🍰",
+  },
+};
+
+const DEFAULT_THEME: CategoryTheme = {
+  gradient: "from-stone-400 to-stone-500",
+  badgeBg: "bg-stone-50 border-stone-200",
+  badgeText: "text-stone-700",
+  emoji: "📚",
+};
+
+export function getCategoryTheme(category: string): CategoryTheme {
+  return CATEGORY_THEMES[category] ?? DEFAULT_THEME;
+}
+

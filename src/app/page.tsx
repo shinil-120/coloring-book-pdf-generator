@@ -84,14 +84,14 @@ export default function Home() {
       </main>
 
       {/* ───────────────────────── Footer ───────────────────────── */}
-      <footer className="mt-auto border-t border-rose-100/80 bg-white/70 backdrop-blur-sm">
+      <footer className="mt-auto border-t border-rose-100/80 bg-white/80 backdrop-blur-sm">
         <div className="mx-auto max-w-7xl px-4 py-5 sm:px-6 lg:px-8">
           <div className="flex flex-col items-center justify-between gap-2 text-center sm:flex-row sm:text-left">
-            <p className="text-xs font-medium text-stone-500">
+            <p className="text-xs font-semibold text-stone-600">
               © {new Date().getFullYear()} Coloring Book Studio · Built for
               Amazon KDP creators
             </p>
-            <p className="text-xs font-medium text-stone-400">
+            <p className="text-xs font-semibold text-stone-500">
               AI-generated · Auto-colorized · Bleed-through safe
             </p>
           </div>
