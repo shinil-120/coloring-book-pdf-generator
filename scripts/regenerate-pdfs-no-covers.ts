@@ -66,22 +66,16 @@ function formatBytes(bytes: number): string {
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
 }
 
-function formatReadableUTC(d: Date): string {
-  const months = [
-    "Jan", "Feb", "Mar", "Apr", "May", "Jun",
-    "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
-  ];
+function formatReadableIST(d: Date): string {
+  // Indian Standard Time = UTC+5:30
+  const istOffset = 5.5 * 60 * 60 * 1000;
+  const istDate = new Date(d.getTime() + istOffset);
+  const months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   const pad = (n: number) => String(n).padStart(2, "0");
-  return `${months[d.getUTCMonth()]} ${d.getUTCDate()}, ${d.getUTCFullYear()}, ${pad(
-    d.getUTCHours()
-  )}:${pad(d.getUTCMinutes())} ${pad(d.getUTCHours() < 12 ? "AM" : "PM")} UTC`.replace(
-    /(\d{2}):(\d{2}) (AM|PM)/,
-    (_, h: string, m: string, ap: string) => {
-      const hh = parseInt(h, 10);
-      const h12 = hh % 12 === 0 ? 12 : hh % 12;
-      return `${pad(h12)}:${m} ${ap}`;
-    }
-  );
+  const hh = istDate.getUTCHours();
+  const h12 = hh % 12 === 0 ? 12 : hh % 12;
+  const ap = hh < 12 ? "AM" : "PM";
+  return `${months[istDate.getUTCMonth()]} ${istDate.getUTCDate()}, ${istDate.getUTCFullYear()}, ${pad(h12)}:${pad(istDate.getUTCMinutes())} ${ap} IST`;
 }
 
 function slugify(s: string): string {
@@ -308,7 +302,7 @@ async function main() {
       pages: pageCount,
       category: book.category,
       timestamp: now.toISOString(),
-      readableTime: formatReadableUTC(now),
+      readableTime: formatReadableIST(now),
       description: items.length === book.items.length
         ? book.description
         : `${items.length} pages — no covers, no blanks`,

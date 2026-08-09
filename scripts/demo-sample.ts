@@ -65,18 +65,21 @@ function formatBytes(bytes: number): string {
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
 }
 
-function formatReadableUTC(d: Date): string {
+function formatReadableIST(d: Date): string {
+  // Indian Standard Time = UTC+5:30
+  const istOffset = 5.5 * 60 * 60 * 1000;
+  const istDate = new Date(d.getTime() + istOffset);
   const months = [
     "Jan", "Feb", "Mar", "Apr", "May", "Jun",
     "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
   ];
   const pad = (n: number) => String(n).padStart(2, "0");
-  const hh = d.getUTCHours();
+  const hh = istDate.getUTCHours();
   const h12 = hh % 12 === 0 ? 12 : hh % 12;
   const ap = hh < 12 ? "AM" : "PM";
-  return `${months[d.getUTCMonth()]} ${d.getUTCDate()}, ${d.getUTCFullYear()}, ${pad(
+  return `${months[istDate.getUTCMonth()]} ${istDate.getUTCDate()}, ${istDate.getUTCFullYear()}, ${pad(
     h12
-  )}:${pad(d.getUTCMinutes())} ${ap} UTC`;
+  )}:${pad(istDate.getUTCMinutes())} ${ap} IST`;
 }
 
 interface ProcessedItem {
@@ -303,7 +306,7 @@ async function main() {
       pages: processed.length,
       category: book.category,
       timestamp: now.toISOString(),
-      readableTime: formatReadableUTC(now),
+      readableTime: formatReadableIST(now),
       description: `${processed.length} pages — no covers, no blanks`,
       items,
     });
