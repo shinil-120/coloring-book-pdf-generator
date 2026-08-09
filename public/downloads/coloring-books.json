@@ -1,0 +1,50 @@
+[
+  {
+    "name": "Vehicles Coloring Book",
+    "url": "/downloads/Vehicles-Coloring-Book.pdf",
+    "slug": "Vehicles",
+    "size": "185.2 KB",
+    "sizeBytes": 189651,
+    "pages": 5,
+    "category": "Vehicles",
+    "timestamp": "2026-08-09T07:02:23.098Z",
+    "readableTime": "Aug 9, 2026, 07:02 AM UTC",
+    "description": "5 pages — no covers, no blanks"
+  },
+  {
+    "name": "Ocean Animals Coloring Book",
+    "url": "/downloads/Ocean-Animals-Coloring-Book.pdf",
+    "slug": "Ocean-Animals",
+    "size": "195.4 KB",
+    "sizeBytes": 200098,
+    "pages": 5,
+    "category": "Ocean Animals",
+    "timestamp": "2026-08-09T07:02:21.423Z",
+    "readableTime": "Aug 9, 2026, 07:02 AM UTC",
+    "description": "5 pages — no covers, no blanks"
+  },
+  {
+    "name": "Dragons Coloring Book",
+    "url": "/downloads/Dragons-Coloring-Book.pdf",
+    "slug": "Dragons",
+    "size": "193.1 KB",
+    "sizeBytes": 197690,
+    "pages": 5,
+    "category": "Dragons",
+    "timestamp": "2026-08-09T07:02:19.685Z",
+    "readableTime": "Aug 9, 2026, 07:02 AM UTC",
+    "description": "5 pages — no covers, no blanks"
+  },
+  {
+    "name": "Dinosaurs Coloring Book",
+    "url": "/downloads/Dinosaurs-Coloring-Book.pdf",
+    "slug": "Dinosaurs",
+    "size": "185 KB",
+    "sizeBytes": 189431,
+    "pages": 5,
+    "category": "Dinosaurs",
+    "timestamp": "2026-08-09T07:02:17.978Z",
+    "readableTime": "Aug 9, 2026, 07:02 AM UTC",
+    "description": "5 pages — no covers, no blanks"
+  }
+]

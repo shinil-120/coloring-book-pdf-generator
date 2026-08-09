@@ -1,0 +1,381 @@
+/**
+ * Image processing pipeline for the Coloring Book PDF Generator.
+ *
+ *  Step 2: clean B&W  (greyscale → flatten → threshold @100 → erode ~30%)
+ *  Step 3: auto-colorize (flood-fill enclosed regions, skip border-touching,
+ *          size >3 && <500000, largest-first, palette-cycled)
+ *
+ * Used by scripts/regenerate-pdfs-no-covers.ts and the demo script.
+ */
+import sharp from "sharp";
+import path from "path";
+import fs from "fs";
+import {
+  type Palette,
+  type RGB,
+  getPalette,
+  PAGE_WIDTH,
+  PAGE_HEIGHT,
+  MARGIN,
+  REF_SIZE,
+  REF_X,
+  REF_Y,
+  BW_SIZE,
+  BW_X,
+  BW_Y,
+  TITLE_Y,
+  PAGE_NUM_X,
+  PAGE_NUM_Y,
+} from "../src/lib/coloring-data";
+
+// ─────────────────────────────────────────────────────────────────────────
+// Step 2: clean B&W
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * Convert a raw AI B&W image to a clean B&W line-art image.
+ *  - greyscale
+ *  - flatten white bg
+ *  - threshold: pixel < 100 → black (0), else white (255)
+ *  - erode black lines ~30% (thin them) using a 3×3 min-ish morphology
+ */
+export async function cleanBwImage(
+  inputPath: string,
+  outputPath: string,
+  options: { threshold?: number; erodePercent?: number } = {}
+): Promise<void> {
+  const threshold = options.threshold ?? 100;
+  const erodePercent = options.erodePercent ?? 30;
+
+  const { data, info } = await sharp(inputPath)
+    .greyscale()
+    .flatten({ background: { r: 255, g: 255, b: 255 } })
+    .resize(1024, 1024, { fit: "cover" })
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+
+  const w = info.width;
+  const h = info.height;
+  const channels = info.channels;
+
+  // Threshold → pure black/white single-channel buffer
+  const bw = Buffer.alloc(w * h);
+  for (let i = 0; i < w * h; i++) {
+    const v = data[i * channels]; // greyscale, all channels equal
+    bw[i] = v < threshold ? 0 : 255;
+  }
+
+  // Erode black lines: for each black pixel, count black neighbors.
+  // If more than (100 - erodePercent)% of neighbors are white, turn white.
+  // erodePercent=30 → if >70% neighbors white, erode.
+  // Implemented as: keep black only if black-neighbor-count >= threshold.
+  const eroded = Buffer.from(bw);
+  const neighborThreshold = Math.round((8 * erodePercent) / 100); // # black neighbors needed to survive
+  // Simpler & more reliable thinning: erode = remove black pixels that have
+  // any white 4-neighbor (classic erosion would shrink lines). To THIN by
+  // ~30%, we probabilistically remove border black pixels.
+  for (let y = 1; y < h - 1; y++) {
+    for (let x = 1; x < w - 1; x++) {
+      const idx = y * w + x;
+      if (bw[idx] === 0) {
+        // Count black 8-neighbors
+        let blackN = 0;
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            if (dy === 0 && dx === 0) continue;
+            if (bw[(y + dy) * w + (x + dx)] === 0) blackN++;
+          }
+        }
+        // A pixel on the EDGE of a line has few black neighbors.
+        // erodePercent=30 → remove pixels with < 30% black neighbors
+        // i.e. blackN < 2.4 → blackN <= 2  (30% of 8 = 2.4)
+        const surviveThreshold = Math.ceil((8 * erodePercent) / 100);
+        if (blackN < surviveThreshold) {
+          eroded[idx] = 255; // erode → white
+        }
+      }
+    }
+  }
+
+  // Write back as RGB PNG
+  const outRgb = Buffer.alloc(w * h * 3);
+  for (let i = 0; i < w * h; i++) {
+    const v = eroded[i];
+    outRgb[i * 3] = v;
+    outRgb[i * 3 + 1] = v;
+    outRgb[i * 3 + 2] = v;
+  }
+
+  await sharp(outRgb, { raw: { width: w, height: h, channels: 3 } })
+    .png()
+    .toFile(outputPath);
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Step 3: auto-colorize (flood fill enclosed white regions)
+// ─────────────────────────────────────────────────────────────────────────
+
+/**
+ * Colorize a clean B&W image using flood-fill region detection.
+ *
+ * Algorithm (per spec):
+ *   1. Load B&W image as raw RGB buffer.
+ *   2. For each pixel, if white (>200) and not visited:
+ *        flood-fill 8-connected neighbors → collect region pixels.
+ *        track if region touches image border.
+ *   3. Keep regions that: don't touch border AND size > 3 AND size < 500000.
+ *   4. Sort regions LARGEST FIRST.
+ *   5. For each region i: color = palette[i % palette.length].
+ *   6. Save as PNG.
+ */
+export async function colorizeImage(
+  bwPath: string,
+  outputPath: string,
+  palette: Palette,
+  options: { whiteThreshold?: number; minSize?: number; maxSize?: number } = {}
+): Promise<void> {
+  const whiteThreshold = options.whiteThreshold ?? 200;
+  const minSize = options.minSize ?? 3;
+  const maxSize = options.maxSize ?? 500000;
+
+  const { data, info } = await sharp(bwPath)
+    .resize(1024, 1024, { fit: "cover" })
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+
+  const w = info.width;
+  const h = info.height;
+  const ch = info.channels;
+  const total = w * h;
+
+  // Build single-channel luminance buffer
+  const lum = new Uint8Array(total);
+  for (let i = 0; i < total; i++) {
+    if (ch >= 3) {
+      lum[i] = (data[i * ch] + data[i * ch + 1] + data[i * ch + 2]) / 3;
+    } else {
+      lum[i] = data[i * ch];
+    }
+  }
+
+  const visited = new Uint8Array(total);
+  interface Region {
+    pixels: number[]; // indices
+    size: number;
+    touchesBorder: boolean;
+  }
+  const regions: Region[] = [];
+
+  // Iterative BFS flood fill (8-connected) using a stack
+  const stack: number[] = new Array(total);
+
+  for (let start = 0; start < total; start++) {
+    if (visited[start] || lum[start] <= whiteThreshold) continue;
+
+    // Start a new region
+    let head = 0;
+    let tail = 0;
+    stack[tail++] = start;
+    visited[start] = 1;
+
+    const pixelIndices: number[] = [];
+    let touchesBorder = false;
+    const startY = Math.floor(start / w);
+    const startX = start % w;
+    if (startX === 0 || startX === w - 1 || startY === 0 || startY === h - 1) {
+      touchesBorder = true;
+    }
+
+    while (head < tail) {
+      const idx = stack[head++];
+      pixelIndices.push(idx);
+
+      const y = Math.floor(idx / w);
+      const x = idx % w;
+
+      // 8-connected neighbors
+      for (let dy = -1; dy <= 1; dy++) {
+        const ny = y + dy;
+        if (ny < 0 || ny >= h) continue;
+        for (let dx = -1; dx <= 1; dx++) {
+          if (dx === 0 && dy === 0) continue;
+          const nx = x + dx;
+          if (nx < 0 || nx >= w) continue;
+          const nidx = ny * w + nx;
+          if (visited[nidx]) continue;
+          if (lum[nidx] <= whiteThreshold) continue;
+          visited[nidx] = 1;
+          if (nx === 0 || nx === w - 1 || ny === 0 || ny === h - 1) {
+            touchesBorder = true;
+          }
+          stack[tail++] = nidx;
+        }
+      }
+    }
+
+    const size = pixelIndices.length;
+    if (!touchesBorder && size > minSize && size < maxSize) {
+      regions.push({ pixels: pixelIndices, size, touchesBorder });
+    }
+  }
+
+  // Sort largest first
+  regions.sort((a, b) => b.size - a.size);
+
+  // Build output RGB buffer (start from the clean B&W: black lines stay black,
+  // white background stays white, enclosed regions get colored)
+  const outRgb = Buffer.alloc(total * 3);
+  for (let i = 0; i < total; i++) {
+    const v = lum[i];
+    outRgb[i * 3] = v;
+    outRgb[i * 3 + 1] = v;
+    outRgb[i * 3 + 2] = v;
+  }
+
+  // Color each region
+  regions.forEach((region, i) => {
+    const color: RGB = palette[i % palette.length];
+    for (const idx of region.pixels) {
+      outRgb[idx * 3] = color[0];
+      outRgb[idx * 3 + 1] = color[1];
+      outRgb[idx * 3 + 2] = color[2];
+    }
+  });
+
+  await sharp(outRgb, { raw: { width: w, height: h, channels: 3 } })
+    .png()
+    .toFile(outputPath);
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Convenience: clean + colorize one item, return paths
+// ─────────────────────────────────────────────────────────────────────────
+
+export interface ProcessedImages {
+  bwPath: string;     // cleaned B&W
+  colorPath: string;  // auto-colorized
+}
+
+export async function processItem(
+  categoryDir: string,
+  item: string,
+  category: string
+): Promise<ProcessedImages> {
+  const bwDir = path.join(categoryDir, "bw");
+  const cleanDir = path.join(categoryDir, "clean");
+  fs.mkdirSync(bwDir, { recursive: true });
+  fs.mkdirSync(cleanDir, { recursive: true });
+
+  const rawBw = path.join(bwDir, `${item}.png`);
+  const cleanBw = path.join(cleanDir, `${item}-bw.png`);
+  const colorImg = path.join(cleanDir, `${item}-color.png`);
+
+  const palette = getPalette(item, category);
+
+  // If raw image missing, generate a placeholder so the pipeline still runs
+  // (used by the demo script which does NOT call the AI image API in bulk).
+  if (!fs.existsSync(rawBw) || fs.statSync(rawBw).size < 1024) {
+    await generatePlaceholderLineArt(rawBw, item, category);
+  }
+
+  if (!fs.existsSync(cleanBw) || fs.statSync(cleanBw).size < 1024) {
+    await cleanBwImage(rawBw, cleanBw);
+  }
+  if (!fs.existsSync(colorImg) || fs.statSync(colorImg).size < 1024) {
+    await colorizeImage(cleanBw, colorImg, palette);
+  }
+
+  return { bwPath: cleanBw, colorPath: colorImg };
+}
+
+// ─────────────────────────────────────────────────────────────────────────
+// Placeholder line-art generator (for testing WITHOUT bulk AI generation)
+// Draws a simple shape with thick outlines on white, suitable for the
+// colorization pipeline to still produce a sensible result.
+// ─────────────────────────────────────────────────────────────────────────
+
+export async function generatePlaceholderLineArt(
+  outPath: string,
+  item: string,
+  category: string
+): Promise<void> {
+  // Deterministic seed from name
+  let seed = 0;
+  for (let i = 0; i < item.length; i++) seed = (seed * 31 + item.charCodeAt(i)) >>> 0;
+  const rng = () => {
+    seed = (seed * 1664525 + 1013904223) >>> 0;
+    return seed / 0xffffffff;
+  };
+
+  const size = 1024;
+  // Build an SVG with a few overlapping rounded shapes + a label,
+  // thick black strokes on white. This gives the flood-fill something
+  // meaningful to colorize.
+  const shapes: string[] = [];
+  const numShapes = 3 + Math.floor(rng() * 3); // 3-5 shapes
+
+  for (let i = 0; i < numShapes; i++) {
+    const cx = 200 + rng() * 624;
+    const cy = 200 + rng() * 624;
+    const rx = 100 + rng() * 180;
+    const ry = 100 + rng() * 180;
+    const rot = rng() * 360;
+    if (rng() > 0.5) {
+      shapes.push(
+        `<ellipse cx="${cx.toFixed(0)}" cy="${cy.toFixed(0)}" rx="${rx.toFixed(0)}" ry="${ry.toFixed(0)}" fill="white" stroke="black" stroke-width="${(18 + rng() * 10).toFixed(0)}" transform="rotate(${rot.toFixed(0)} ${cx.toFixed(0)} ${cy.toFixed(0)})"/>`
+      );
+    } else {
+      const r = Math.min(rx, ry);
+      shapes.push(
+        `<circle cx="${cx.toFixed(0)}" cy="${cy.toFixed(0)}" r="${r.toFixed(0)}" fill="white" stroke="black" stroke-width="${(18 + rng() * 10).toFixed(0)}"/>`
+      );
+    }
+  }
+
+  // A big central body shape so the largest region is the "body"
+  shapes.push(
+    `<ellipse cx="512" cy="512" rx="320" ry="300" fill="white" stroke="black" stroke-width="22"/>`
+  );
+  // Eyes
+  shapes.push(`<circle cx="430" cy="440" r="34" fill="white" stroke="black" stroke-width="14"/>`);
+  shapes.push(`<circle cx="594" cy="440" r="34" fill="white" stroke="black" stroke-width="14"/>`);
+  shapes.push(`<circle cx="430" cy="440" r="12" fill="black"/>`);
+  shapes.push(`<circle cx="594" cy="440" r="12" fill="black"/>`);
+  // Smile
+  shapes.push(
+    `<path d="M 420 600 Q 512 680 604 600" fill="none" stroke="black" stroke-width="14" stroke-linecap="round"/>`
+  );
+
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 ${size} ${size}">
+    <rect width="${size}" height="${size}" fill="white"/>
+    ${shapes.join("\n    ")}
+    <text x="512" y="980" text-anchor="middle" font-family="Arial, sans-serif" font-size="42" font-weight="bold" fill="#333">${escapeXml(item)}</text>
+  </svg>`;
+
+  await sharp(Buffer.from(svg)).png().toFile(outPath);
+}
+
+function escapeXml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&apos;");
+}
+
+// Re-export layout constants for convenience
+export {
+  PAGE_WIDTH,
+  PAGE_HEIGHT,
+  MARGIN,
+  REF_SIZE,
+  REF_X,
+  REF_Y,
+  BW_SIZE,
+  BW_X,
+  BW_Y,
+  TITLE_Y,
+  PAGE_NUM_X,
+  PAGE_NUM_Y,
+};

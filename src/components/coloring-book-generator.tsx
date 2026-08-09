@@ -268,7 +268,6 @@ function BookCard({
             <Clock className="h-2.5 w-2.5 text-rose-500" />
             {book.readableTime || "—"}
           </div>
-          {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
             src={thumb}
             alt={`${book.name} page 1 preview`}
