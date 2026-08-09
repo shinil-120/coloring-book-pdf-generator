@@ -44,6 +44,7 @@ const CATEGORY_SUFFIX: Record<string, string> = {
   "Food & Sweets": "food",
   Pets: "pet",
   Birds: "bird",
+  Mandala: "mandala",
 };
 
 export function categorySuffix(category: string): string {
@@ -220,6 +221,20 @@ export const BOOKS: ColoringBook[] = [
       "Stork", "Crane", "Heron", "Swan", "Goose",
       "Duck", "Rooster", "Hen", "Chick", "Turkey",
       "Ostrich", "Toucan", "Vulture", "Falcon", "Hawk",
+    ],
+  },
+  {
+    name: "Mandala Art Coloring Book",
+    slug: "Mandala",
+    category: "Mandala",
+    description: "30 pages — no covers, no blanks",
+    items: [
+      "Flower Mandala", "Geometric Mandala", "Lotus Mandala", "Sun Mandala", "Star Mandala",
+      "Celtic Mandala", "Zen Mandala", "Peacock Mandala", "Moon Mandala", "Leaf Mandala",
+      "Spiral Mandala", "Butterfly Mandala", "Ocean Mandala", "Fire Mandala", "Crystal Mandala",
+      "Tribal Mandala", "Cosmic Mandala", "Garden Mandala", "Snowflake Mandala", "Heart Mandala",
+      "Phoenix Mandala", "Dragon Mandala", "Eagle Mandala", "Elephant Mandala", "Lion Mandala",
+      "Tree of Life Mandala", "Wave Mandala", "Desert Mandala", "Rainbow Mandala", "Galaxy Mandala",
     ],
   },
 ];
@@ -587,6 +602,38 @@ export const NATURAL_PALETTES: Record<string, Palette> = {
   Vulture: [[100, 80, 70], [70, 55, 45], [200, 180, 160]],       // dark brown + darker + light
   Falcon: [[120, 100, 80], [80, 65, 50], [200, 185, 165]],       // brown + dark + light
   Hawk: [[130, 100, 70], [90, 70, 45], [200, 180, 150]],         // brown + dark + light
+
+  // ---- Mandala Art ----
+  "Flower Mandala": [[220, 80, 120], [255, 180, 50], [120, 180, 80]],   // pink petals + gold center + green
+  "Geometric Mandala": [[80, 130, 200], [255, 140, 50], [150, 100, 200]], // blue + orange + purple
+  "Lotus Mandala": [[255, 150, 180], [200, 100, 150], [255, 220, 100]],  // pink + magenta + gold
+  "Sun Mandala": [[255, 180, 40], [255, 120, 30], [255, 230, 100]],      // yellow + orange + light yellow
+  "Star Mandala": [[100, 150, 220], [255, 220, 80], [200, 100, 220]],    // blue + yellow + purple
+  "Celtic Mandala": [[60, 130, 80], [180, 140, 60], [200, 200, 180]],   // green + gold + cream
+  "Zen Mandala": [[120, 180, 160], [80, 140, 130], [200, 220, 200]],    // teal + dark teal + light
+  "Peacock Mandala": [[40, 120, 100], [255, 180, 50], [80, 50, 120]],   // teal + gold + indigo
+  "Moon Mandala": [[180, 190, 220], [120, 130, 170], [220, 230, 250]],  // pale blue + dark + light
+  "Leaf Mandala": [[80, 160, 70], [50, 110, 40], [180, 210, 120]],      // green + dark + light
+  "Spiral Mandala": [[200, 100, 180], [100, 150, 220], [255, 200, 80]], // magenta + blue + yellow
+  "Butterfly Mandala": [[255, 130, 60], [100, 150, 220], [255, 220, 100]], // orange + blue + yellow
+  "Ocean Mandala": [[60, 130, 180], [40, 90, 150], [120, 180, 220]],    // blue + dark + light
+  "Fire Mandala": [[220, 60, 30], [255, 140, 30], [255, 200, 50]],      // red + orange + yellow
+  "Crystal Mandala": [[150, 200, 240], [100, 160, 220], [200, 230, 250]], // light blue + medium + pale
+  "Tribal Mandala": [[140, 80, 50], [200, 150, 80], [80, 50, 30]],      // brown + tan + dark
+  "Cosmic Mandala": [[80, 50, 120], [200, 100, 200], [255, 200, 100]],  // purple + magenta + gold
+  "Garden Mandala": [[120, 180, 80], [255, 150, 180], [255, 220, 100]], // green + pink + yellow
+  "Snowflake Mandala": [[180, 210, 240], [120, 160, 200], [220, 235, 250]], // pale blue + medium + white
+  "Heart Mandala": [[220, 60, 80], [255, 130, 150], [180, 40, 60]],     // red + pink + dark red
+  "Phoenix Mandala": [[255, 100, 30], [220, 50, 30], [255, 200, 50]],   // orange + red + yellow
+  "Dragon Mandala": [[60, 140, 60], [40, 100, 40], [120, 180, 80]],     // green + dark + light
+  "Eagle Mandala": [[140, 100, 70], [90, 70, 50], [200, 180, 150]],     // brown + dark + light
+  "Elephant Mandala": [[130, 120, 110], [100, 90, 80], [170, 160, 150]], // grey + dark + light
+  "Lion Mandala": [[200, 160, 80], [160, 120, 50], [240, 220, 180]],    // tan + dark + light
+  "Tree of Life Mandala": [[80, 140, 60], [120, 80, 40], [180, 210, 120]], // green + brown + light green
+  "Wave Mandala": [[60, 140, 200], [40, 100, 160], [120, 190, 230]],    // blue + dark + light
+  "Desert Mandala": [[220, 180, 110], [180, 140, 80], [240, 220, 170]], // sand + dark + light
+  "Rainbow Mandala": [[220, 60, 60], [255, 180, 40], [80, 160, 80]],    // red + yellow + green
+  "Galaxy Mandala": [[60, 40, 100], [200, 100, 200], [100, 150, 220]],  // dark purple + magenta + blue
 };
 
 // ---------------------------------------------------------------------------
@@ -817,6 +864,12 @@ const CATEGORY_THEMES: Record<string, CategoryTheme> = {
     badgeBg: "bg-indigo-50 border-indigo-200",
     badgeText: "text-indigo-700",
     emoji: "📕",
+  },
+  Mandala: {
+    gradient: "from-fuchsia-400 to-purple-500",
+    badgeBg: "bg-fuchsia-50 border-fuchsia-200",
+    badgeText: "text-fuchsia-700",
+    emoji: "🌀",
   },
 };
 
