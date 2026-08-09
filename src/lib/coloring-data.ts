@@ -43,6 +43,7 @@ const CATEGORY_SUFFIX: Record<string, string> = {
   Space: "space object",
   "Food & Sweets": "food",
   Pets: "pet",
+  Birds: "bird",
 };
 
 export function categorySuffix(category: string): string {
@@ -205,6 +206,20 @@ export const BOOKS: ColoringBook[] = [
       "Bearded Dragon", "Corn Snake", "Leopard Gecko", "Betta Fish", "Koi Fish",
       "Hedgehog", "Sugar Glider", "Pot-Bellied Pig", "Mini Goat", "Chick",
       "Duckling", "Tarantula", "Snail", "Iguana", "Finch",
+    ],
+  },
+  {
+    name: "Birds Coloring Book",
+    slug: "Birds",
+    category: "Birds",
+    description: "30 pages — no covers, no blanks",
+    items: [
+      "Eagle", "Owl", "Flamingo", "Peacock", "Penguin",
+      "Hummingbird", "Parrot", "Robin", "Sparrow", "Cardinal",
+      "Blue Jay", "Woodpecker", "Kingfisher", "Pelican", "Seagull",
+      "Stork", "Crane", "Heron", "Swan", "Goose",
+      "Duck", "Rooster", "Hen", "Chick", "Turkey",
+      "Ostrich", "Toucan", "Vulture", "Falcon", "Hawk",
     ],
   },
 ];
@@ -542,6 +557,36 @@ export const NATURAL_PALETTES: Record<string, Palette> = {
   Snail: [[180, 150, 100], [140, 110, 70], [220, 200, 160]],     // tan shell + dark + light body
   Iguana: [[100, 160, 70], [60, 120, 50], [180, 200, 100]],      // green body + dark + light
   Finch: [[180, 130, 80], [120, 80, 50], [240, 220, 180]],       // brown + dark + light belly
+
+  // ---- Birds ----
+  Eagle: [[110, 90, 70], [80, 65, 50], [200, 180, 150]],         // dark brown body + darker wings + light head
+  Owl: [[150, 120, 90], [100, 80, 60], [220, 200, 170]],         // tawny brown + dark + cream chest
+  Flamingo: [[255, 130, 160], [255, 100, 140], [255, 180, 200]], // pink body + darker pink wings + light pink
+  Peacock: [[40, 120, 100], [255, 180, 50], [60, 40, 120]],      // teal body + gold accents + indigo
+  Penguin: [[40, 40, 50], [215, 215, 220], [240, 180, 60]],      // black back + grey belly + yellow beak
+  Hummingbird: [[80, 180, 120], [120, 200, 220], [255, 180, 50]], // green body + turquoise throat + yellow
+  Robin: [[200, 100, 70], [120, 80, 60], [230, 220, 200]],       // orange breast + brown back + light belly
+  Sparrow: [[150, 120, 90], [100, 80, 60], [200, 185, 165]],     // brown + dark + light
+  Cardinal: [[210, 50, 50], [160, 30, 30], [220, 180, 100]],     // red body + dark red + orange beak
+  "Blue Jay": [[80, 130, 200], [255, 255, 255], [40, 40, 40]],   // blue body + white + black stripes
+  Woodpecker: [[200, 60, 50], [40, 30, 30], [230, 220, 200]],    // red head + black + white body
+  Kingfisher: [[60, 130, 180], [255, 120, 50], [200, 220, 240]], // blue back + orange belly + light
+  Pelican: [[180, 170, 160], [120, 110, 100], [220, 210, 200]],  // grey body + dark + light
+  Seagull: [[180, 185, 195], [120, 125, 135], [255, 180, 50]],   // grey body + dark + yellow beak
+  Stork: [[200, 200, 205], [150, 150, 155], [200, 60, 50]],      // white body + grey + red beak
+  Crane: [[200, 200, 205], [150, 150, 155], [200, 60, 50]],      // white body + grey + red
+  Heron: [[80, 110, 130], [50, 70, 90], [180, 190, 200]],        // blue-grey body + dark + light
+  Swan: [[215, 215, 218], [180, 180, 185], [255, 150, 50]],      // light grey body (not white) + darker + orange beak
+  Goose: [[150, 120, 90], [100, 80, 60], [220, 200, 170]],       // brown + dark + light
+  Duck: [[40, 100, 50], [255, 200, 50], [60, 40, 30]],           // green head + yellow beak + dark body
+  Rooster: [[180, 50, 50], [255, 180, 50], [50, 50, 50]],        // red comb + gold + dark
+  Hen: [[160, 120, 90], [120, 90, 60], [220, 200, 170]],         // brown + dark + light
+  Turkey: [[120, 80, 60], [150, 50, 50], [200, 170, 100]],       // brown body + red wattle + tan
+  Ostrich: [[90, 80, 75], [60, 50, 45], [200, 180, 150]],        // dark grey-brown + darker + light feathers
+  Toucan: [[30, 30, 35], [255, 150, 30], [255, 220, 50]],        // black body + orange beak + yellow chest
+  Vulture: [[100, 80, 70], [70, 55, 45], [200, 180, 160]],       // dark brown + darker + light
+  Falcon: [[120, 100, 80], [80, 65, 50], [200, 185, 165]],       // brown + dark + light
+  Hawk: [[130, 100, 70], [90, 70, 45], [200, 180, 150]],         // brown + dark + light
 };
 
 // ---------------------------------------------------------------------------
@@ -760,6 +805,12 @@ const CATEGORY_THEMES: Record<string, CategoryTheme> = {
     badgeBg: "bg-amber-50 border-amber-200",
     badgeText: "text-amber-700",
     emoji: "🐶",
+  },
+  Birds: {
+    gradient: "from-cyan-400 to-sky-500",
+    badgeBg: "bg-cyan-50 border-cyan-200",
+    badgeText: "text-cyan-700",
+    emoji: "🦅",
   },
 };
 
