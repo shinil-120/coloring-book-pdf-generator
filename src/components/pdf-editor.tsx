@@ -81,7 +81,7 @@ interface EditPage {
   isBlank: boolean;
 }
 
-type Step = "select" | "edit" | "download" | "merge" | "cover";
+type Step = "select" | "edit" | "download" | "merge" | "cover" | "assembly";
 
 // ---------------------------------------------------------------------------
 // Main component
