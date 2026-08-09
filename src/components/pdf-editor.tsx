@@ -90,6 +90,7 @@ type Step = "select" | "edit" | "download" | "merge" | "cover" | "assembly";
 export function PdfEditor() {
   const [step, setStep] = useState<Step>("select");
   const [books, setBooks] = useState<BookMeta[]>([]);
+  const [allBooks, setAllBooks] = useState<BookMeta[]>([]); // includes covers (for Merge Books)
   const [loadingBooks, setLoadingBooks] = useState(true);
 
   const [selectedBook, setSelectedBook] = useState<BookMeta | null>(null);
@@ -133,9 +134,10 @@ export function PdfEditor() {
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      const allBooks: BookMeta[] = Array.isArray(data) ? data : data.books ?? [];
+      const allBooksData: BookMeta[] = Array.isArray(data) ? data : data.books ?? [];
+      setAllBooks(allBooksData); // keep all books (including covers) for Merge Books
       // SelectStep: only show interior coloring books (covers are in Merge Books)
-      const list: BookMeta[] = allBooks.filter((b) => b.category !== "Cover");
+      const list: BookMeta[] = allBooksData.filter((b) => b.category !== "Cover");
       setBooks(list);
     } catch {
       setBooks([]);
@@ -379,7 +381,7 @@ export function PdfEditor() {
   }
 
   if (step === "merge") {
-    return <MergeBooks books={books} onBack={() => setStep("select")} />;
+    return <MergeBooks books={allBooks} onBack={() => setStep("select")} />;
   }
 
   if (step === "cover") {
