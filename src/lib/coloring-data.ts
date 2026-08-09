@@ -45,6 +45,7 @@ const CATEGORY_SUFFIX: Record<string, string> = {
   Pets: "pet",
   Birds: "bird",
   Mandala: "mandala",
+  "Musical Instruments": "musical instrument",
 };
 
 export function categorySuffix(category: string): string {
@@ -235,6 +236,20 @@ export const BOOKS: ColoringBook[] = [
       "Tribal Mandala", "Cosmic Mandala", "Garden Mandala", "Snowflake Mandala", "Heart Mandala",
       "Phoenix Mandala", "Dragon Mandala", "Eagle Mandala", "Elephant Mandala", "Lion Mandala",
       "Tree of Life Mandala", "Wave Mandala", "Desert Mandala", "Rainbow Mandala", "Galaxy Mandala",
+    ],
+  },
+  {
+    name: "Musical Instruments Coloring Book",
+    slug: "Musical-Instruments",
+    category: "Musical Instruments",
+    description: "30 pages — no covers, no blanks",
+    items: [
+      "Guitar", "Piano", "Violin", "Drums", "Trumpet",
+      "Saxophone", "Flute", "Cello", "Clarinet", "Banjo",
+      "Harp", "Accordion", "Trombone", "Xylophone", "Tambourine",
+      "Maracas", "Harmonica", "Oboe", "Bassoon", "Tuba",
+      "French Horn", "Keyboard", "Ukulele", "Mandolin", "Sitar",
+      "Bongos", "Conga", "Triangle", "Castanets", "Didgeridoo",
     ],
   },
 ];
@@ -634,6 +649,38 @@ export const NATURAL_PALETTES: Record<string, Palette> = {
   "Desert Mandala": [[220, 180, 110], [180, 140, 80], [240, 220, 170]], // sand + dark + light
   "Rainbow Mandala": [[220, 60, 60], [255, 180, 40], [80, 160, 80]],    // red + yellow + green
   "Galaxy Mandala": [[60, 40, 100], [200, 100, 200], [100, 150, 220]],  // dark purple + magenta + blue
+
+  // ---- Musical Instruments ----
+  Guitar: [[160, 100, 50], [120, 80, 40], [200, 170, 120]],         // warm brown body + dark + light
+  Piano: [[30, 30, 35], [230, 230, 235], [200, 180, 140]],          // black keys + white keys + wood
+  Violin: [[150, 90, 40], [110, 70, 30], [200, 160, 100]],          // amber brown + dark + light
+  Drums: [[180, 50, 40], [60, 60, 70], [240, 240, 240]],            // red shell + dark hardware + white head
+  Trumpet: [[255, 200, 50], [200, 150, 30], [255, 230, 150]],       // gold brass + dark gold + light
+  Saxophone: [[255, 215, 0], [200, 165, 0], [255, 235, 100]],       // gold + dark + light
+  Flute: [[200, 200, 210], [150, 150, 165], [240, 240, 250]],       // silver + dark + light
+  Cello: [[140, 80, 30], [100, 60, 20], [190, 140, 80]],            // warm brown + dark + light
+  Clarinet: [[40, 40, 40], [180, 140, 60], [80, 80, 80]],           // black body + brass keys + dark grey
+  Banjo: [[200, 170, 100], [120, 90, 50], [240, 230, 210]],         // tan wood + dark + light head
+  Harp: [[255, 215, 100], [200, 170, 60], [230, 230, 240]],         // gold frame + dark gold + silver strings
+  Accordion: [[120, 50, 80], [60, 30, 50], [200, 180, 150]],        // deep red + dark + cream keys
+  Trombone: [[220, 220, 230], [170, 170, 185], [250, 250, 255]],    // silver + dark + light
+  Xylophone: [[200, 80, 60], [80, 160, 80], [60, 120, 200]],        // red bar + green bar + blue bar
+  Tambourine: [[180, 130, 60], [220, 200, 100], [140, 100, 40]],    // bronze frame + brass jingles + dark
+  Maracas: [[200, 150, 80], [150, 110, 60], [230, 200, 150]],       // wood + dark + light
+  Harmonica: [[60, 60, 70], [180, 180, 190], [100, 100, 110]],      // black body + silver covers + dark
+  Oboe: [[40, 40, 40], [180, 160, 60], [80, 80, 80]],               // black body + brass keys + dark grey
+  Bassoon: [[60, 50, 35], [180, 160, 60], [100, 85, 60]],           // dark brown + brass keys + light brown
+  Tuba: [[255, 200, 50], [200, 150, 30], [255, 230, 150]],          // gold brass + dark + light
+  "French Horn": [[255, 200, 50], [200, 150, 30], [255, 230, 150]], // gold brass + dark + light
+  Keyboard: [[30, 30, 35], [230, 230, 235], [180, 180, 190]],       // black keys + white keys + grey body
+  Ukulele: [[180, 120, 50], [140, 90, 30], [220, 180, 120]],        // light brown + dark + light
+  Mandolin: [[150, 90, 40], [110, 70, 30], [200, 160, 100]],        // teardrop brown + dark + light
+  Sitar: [[120, 80, 40], [80, 60, 30], [180, 140, 80]],             // brown gourd + dark + light
+  Bongos: [[160, 80, 50], [220, 190, 140], [100, 50, 30]],          // red-brown shell + light head + dark
+  Conga: [[120, 70, 40], [230, 210, 170], [80, 50, 25]],            // brown shell + light head + dark
+  Triangle: [[200, 200, 210], [160, 160, 175], [240, 240, 250]],    // silver + dark + light
+  Castanets: [[160, 100, 50], [120, 80, 40], [200, 160, 100]],      // wood brown + dark + light
+  Didgeridoo: [[140, 80, 40], [100, 60, 25], [190, 140, 80]],       // earth brown + dark + light
 };
 
 // ---------------------------------------------------------------------------
@@ -870,6 +917,12 @@ const CATEGORY_THEMES: Record<string, CategoryTheme> = {
     badgeBg: "bg-fuchsia-50 border-fuchsia-200",
     badgeText: "text-fuchsia-700",
     emoji: "🌀",
+  },
+  "Musical Instruments": {
+    gradient: "from-amber-400 to-orange-500",
+    badgeBg: "bg-amber-50 border-amber-200",
+    badgeText: "text-amber-700",
+    emoji: "🎸",
   },
 };
 
