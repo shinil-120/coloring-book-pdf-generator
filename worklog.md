@@ -632,3 +632,29 @@ Stage Summary:
 - Deployment guide in DEPLOYMENT.md
 - Migration script ready: scripts/migrate-to-turso.ts
 - All existing features preserved (search, filter, sort, grid/list, batch download, preview modals, drag-and-drop editor, merge books, cover generator, final assembly)
+
+---
+Task ID: turso-connection-fix
+Agent: Z.ai Code (production deployment)
+Task: Set up Turso connection, create tables, push to GitHub.
+
+Work Log:
+- User provided Turso credentials (TURSO_DATABASE_URL + TURSO_AUTH_TOKEN)
+- Created .env.local and .env with Turso credentials
+- Created Turso tables (ColoringBook, GeneratedCover) via direct SQL using @libsql/client
+- Fixed Turso connection issues:
+  - Prisma's `libsql://` scheme not recognized by sqlite provider
+  - Prisma driver adapter had URL validation conflicts
+  - Solution: replaced Prisma driver adapter with direct @libsql/client usage
+  - All CRUD operations (listBooks, getBook, upsertBook, deleteBook) now use direct SQL
+  - Prisma schema uses dummy `file:./dummy.db` URL (adapter handles real connection)
+- Tested: /api/books returns source: "turso", 0 books (tables empty, ready for migration)
+- Pushed code to GitHub: https://github.com/shinil-120/coloring-book-pdf-generator
+- Clean lint
+
+Stage Summary:
+- **Turso database connected and tables created** ✓
+- API reads from Turso (source: "turso")
+- GitHub repo updated with Turso fix
+- Ready for next step: Vercel Blob token → migrate Pets book
+- Turso credentials configured locally in .env and .env.local
