@@ -291,14 +291,16 @@ export function PdfEditor() {
 
   // ─── Assemble edited PDF ───
   const assemblePdf = useCallback(async () => {
-    if (!pdfData || pages.length === 0) return;
+    if (pages.length === 0 || !selectedBook) return;
     setAssembling(true);
     try {
       const pageOrder = pages.map((p) => p.sourceIndex);
+      // Send slug instead of pdfData — server fetches PDF from Blob
+      // (avoids Vercel 4.5MB body size limit on base64 PDFs)
       const res = await fetch("/api/assemble-pdf", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ pdfData, pageOrder }),
+        body: JSON.stringify({ slug: selectedBook.slug, pageOrder }),
       });
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
@@ -327,7 +329,7 @@ export function PdfEditor() {
     } finally {
       setAssembling(false);
     }
-  }, [pdfData, pages, selectedBook]);
+  }, [pages, selectedBook]);
 
   // ─── Download edited PDF ───
   const downloadEdited = useCallback(() => {
