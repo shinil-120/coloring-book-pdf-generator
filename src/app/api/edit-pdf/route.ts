@@ -6,6 +6,7 @@ import { listBooks, type BookMeta } from "@/lib/turso";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 interface EditPage {
   index: number;

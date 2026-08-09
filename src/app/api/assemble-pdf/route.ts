@@ -3,6 +3,10 @@ import { PDFDocument, rgb, StandardFonts } from "pdf-lib";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
+
+// Set body size limit for large base64 PDFs
+export const fetchCache = "force-no-store";
 
 // 8.5 × 11 inches @ 72 dpi
 const BLANK_W = 612;

@@ -1,0 +1,24 @@
+{
+  "functions": {
+    "src/app/api/assemble-pdf/route.ts": {
+      "maxDuration": 60,
+      "memory": 1024
+    },
+    "src/app/api/edit-pdf/route.ts": {
+      "maxDuration": 60,
+      "memory": 1024
+    },
+    "src/app/api/merge-books/route.ts": {
+      "maxDuration": 60,
+      "memory": 1024
+    },
+    "src/app/api/final-assembly/route.ts": {
+      "maxDuration": 60,
+      "memory": 1024
+    },
+    "src/app/api/generate-cover/route.ts": {
+      "maxDuration": 60,
+      "memory": 1024
+    }
+  }
+}

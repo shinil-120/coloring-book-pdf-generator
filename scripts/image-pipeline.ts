@@ -387,15 +387,64 @@ export async function colorizeImage(
   // ── STEP 5: Fill remaining whites inside the subject ────────────────
   // After expansion, there may still be uncolored white pixels inside the
   // subject (e.g. a leg outlined separately that the center-fill didn't
-  // reach). Fill any uncolored white pixel INSIDE the bounding box with
-  // the body color (palette[0] = region 0).
+  // reach). Fill any uncolored white pixel that is INSIDE the subject
+  // (surrounded by colored pixels) with the body color.
+  // We use a targeted flood-fill: only fill white pixels that are fully
+  // enclosed by colored/black pixels (not connected to the background).
   if (bodyRegion) {
-    for (let y = bboxMinY; y <= bboxMaxY; y++) {
-      for (let x = bboxMinX; x <= bboxMaxX; x++) {
+    // Mark all white pixels connected to the image border as "background"
+    // (these should NOT be colored — they're outside the subject)
+    const bgVisited = new Uint8Array(total);
+    const bgStack: number[] = new Array(total);
+    let bgHead = 0;
+    let bgTail = 0;
+
+    // Start from all border pixels that are white and uncolored
+    for (let x = 0; x < w; x++) {
+      for (const y of [0, h - 1]) {
         const idx = y * w + x;
-        if (colorMap[idx] === 255 && origMask[idx] === 0) {
-          colorMap[idx] = 0; // body color
+        if (origMask[idx] === 0 && colorMap[idx] === 255 && !bgVisited[idx]) {
+          bgVisited[idx] = 1;
+          bgStack[bgTail++] = idx;
         }
+      }
+    }
+    for (let y = 0; y < h; y++) {
+      for (const x of [0, w - 1]) {
+        const idx = y * w + x;
+        if (origMask[idx] === 0 && colorMap[idx] === 255 && !bgVisited[idx]) {
+          bgVisited[idx] = 1;
+          bgStack[bgTail++] = idx;
+        }
+      }
+    }
+
+    // Flood-fill from border to mark all background-connected whites
+    while (bgHead < bgTail) {
+      const idx = bgStack[bgHead++];
+      const y = Math.floor(idx / w);
+      const x = idx % w;
+      for (let dy = -1; dy <= 1; dy++) {
+        const ny = y + dy;
+        if (ny < 0 || ny >= h) continue;
+        for (let dx = -1; dx <= 1; dx++) {
+          if (dx === 0 && dy === 0) continue;
+          const nx = x + dx;
+          if (nx < 0 || nx >= w) continue;
+          const nidx = ny * w + nx;
+          if (bgVisited[nidx]) continue;
+          if (origMask[nidx] === 0 && colorMap[nidx] === 255) {
+            bgVisited[nidx] = 1;
+            bgStack[bgTail++] = nidx;
+          }
+        }
+      }
+    }
+
+    // Now fill any white pixel that is NOT background-connected with body color
+    for (let i = 0; i < total; i++) {
+      if (colorMap[i] === 255 && origMask[i] === 0 && !bgVisited[i]) {
+        colorMap[i] = 0; // body color
       }
     }
   }
