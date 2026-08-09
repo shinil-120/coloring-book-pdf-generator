@@ -1,5 +1,24 @@
 [
   {
+    "name": "Pets Coloring Book",
+    "url": "/downloads/Pets-Coloring-Book.pdf",
+    "slug": "Pets",
+    "size": "231.6 KB",
+    "sizeBytes": 237113,
+    "pages": 5,
+    "category": "Pets",
+    "timestamp": "2026-08-09T07:50:22.711Z",
+    "readableTime": "Aug 9, 2026, 07:50 AM UTC",
+    "description": "5 pages — no covers, no blanks",
+    "items": [
+      "Dog",
+      "Cat",
+      "Hamster",
+      "Rabbit",
+      "Parrot"
+    ]
+  },
+  {
     "name": "Insects Coloring Book",
     "url": "/downloads/Insects-Coloring-Book.pdf",
     "slug": "Insects",

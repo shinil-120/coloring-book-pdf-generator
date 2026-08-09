@@ -8,13 +8,12 @@
  *   - Skips images that already exist (>5KB)
  *
  * Usage:
- *   bun run scripts/generate-images.ts                     # all books, all items
- *   bun run scripts/generate-images.ts dinosaurs           # one book by slug
- *   bun run scripts/generate-images.ts Dinosaurs "T-Rex"   # one book + one item
+ *   bun run scripts/generate-images.ts                      # all books, all items
+ *   bun run scripts/generate-images.ts pets                 # one book by slug
+ *   bun run scripts/generate-images.ts pets --limit=5       # first 5 items of a book
+ *   bun run scripts/generate-images.ts Dinosaurs "T-Rex"    # one book + one item (substring)
  *
- * ⚠️  WARNING: This calls the AI image API in bulk (300 images for all books).
- *     For quick testing, prefer scripts/demo-sample.ts which uses placeholder
- *     line-art and produces 5-page sample PDFs without any AI calls.
+ * ⚠️  WARNING: Without --limit, this calls the AI image API in bulk.
  *
  * NOTE: z-ai-web-dev-sdk MUST be used in the backend only. This script runs
  *       under Bun/Node, never in the browser.
@@ -57,15 +56,17 @@ async function generateOne(
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
+      // z-ai-web-dev-sdk image generation API (per the image-generation skill):
+      //   response.data[0].base64  (NOT b64_json)
+      //   params: { prompt, size }  (no model / n)
       const result = await zai.images.generations.create({
-        model: "dall-e-3",
         prompt,
-        n: 1,
         size: "1024x1024",
       });
 
-      const b64 = result?.data?.[0]?.b64_json;
-      const url = result?.data?.[0]?.url;
+      const b64 = result?.data?.[0]?.base64
+        ?? (result as { data?: Array<{ b64_json?: string }> })?.data?.[0]?.b64_json;
+      const url = (result as { data?: Array<{ url?: string }> })?.data?.[0]?.url;
 
       if (b64) {
         ensureDir(path.dirname(outPath));
@@ -85,11 +86,18 @@ async function generateOne(
       const is429 = msg.includes("429") || /rate.?limit/i.test(msg);
       if (is429 && attempt < MAX_RETRIES) {
         const wait = 15 * attempt;
-        console.log(`    429 rate-limited, waiting ${wait}s (attempt ${attempt}/${MAX_RETRIES})…`);
+        console.log(`\n    429 rate-limited, waiting ${wait}s (attempt ${attempt}/${MAX_RETRIES})…`);
         await new Promise((r) => setTimeout(r, wait * 1000));
         continue;
       }
-      console.error(`    ✗ FAILED ${item}: ${msg}`);
+      // Non-429 errors: retry up to MAX_RETRIES with a short backoff
+      if (attempt < MAX_RETRIES) {
+        const wait = 3 * attempt;
+        console.log(`\n    error on "${item}" (attempt ${attempt}/${MAX_RETRIES}): ${msg.slice(0, 120)}… retrying in ${wait}s`);
+        await new Promise((r) => setTimeout(r, wait * 1000));
+        continue;
+      }
+      console.error(`\n    ✗ FAILED ${item}: ${msg.slice(0, 200)}`);
       return false;
     }
   }
@@ -103,7 +111,8 @@ async function runQueue<T>(
   concurrency: number
 ) {
   let idx = 0;
-  const runners = Array.from({ length: concurrency }, async () => {
+  const n = Math.min(concurrency, items.length);
+  const runners = Array.from({ length: n }, async () => {
     while (idx < items.length) {
       const myIdx = idx++;
       await worker(items[myIdx]);
@@ -112,16 +121,34 @@ async function runQueue<T>(
   await Promise.all(runners);
 }
 
+function parseArgs(argv: string[]): {
+  filter?: string;
+  itemFilter?: string;
+  limit?: number;
+} {
+  const positional: string[] = [];
+  let limit: number | undefined;
+  for (const a of argv.slice(2)) {
+    if (a.startsWith("--limit=")) {
+      const n = parseInt(a.slice(8), 10);
+      if (!Number.isNaN(n) && n > 0) limit = n;
+    } else {
+      positional.push(a);
+    }
+  }
+  return { filter: positional[0], itemFilter: positional[1], limit };
+}
+
 async function main() {
-  const filter = process.argv[2]?.trim();
-  const itemFilter = process.argv[3]?.trim();
+  const { filter, itemFilter, limit } = parseArgs(process.argv);
 
   let books = BOOKS;
   if (filter) {
     books = BOOKS.filter(
       (b) =>
         b.slug.toLowerCase().includes(filter.toLowerCase()) ||
-        b.category.toLowerCase().includes(filter.toLowerCase())
+        b.category.toLowerCase().includes(filter.toLowerCase()) ||
+        b.name.toLowerCase().includes(filter.toLowerCase())
     );
     if (books.length === 0) {
       console.error(`No books match "${filter}"`);
@@ -129,11 +156,16 @@ async function main() {
     }
   }
 
-  console.log(`\n🖼️  AI Image Generation`);
+  console.log(`\n🖼️  AI Image Generation (z-ai-web-dev-sdk)`);
   console.log(`   Books: ${books.map((b) => b.slug).join(", ")}`);
-  console.log(`   Concurrency: ${CONCURRENCY}\n`);
+  console.log(`   Concurrency: ${CONCURRENCY}`);
+  if (limit) console.log(`   Limit: first ${limit} item(s) per book`);
+  console.log("");
 
   const zai = await ZAI.create();
+
+  let totalOk = 0;
+  let totalFailed = 0;
 
   for (const book of books) {
     const bwDir = path.join(COLORING_BOOKS_DIR, book.slug, "bw");
@@ -145,28 +177,37 @@ async function main() {
         i.toLowerCase().includes(itemFilter.toLowerCase())
       );
     }
+    if (limit && limit > 0) {
+      items = items.slice(0, limit);
+    }
 
     console.log(`\n📖 ${book.name} — ${items.length} items`);
+    console.log(`   items: ${items.join(", ")}`);
 
-    const tasks = items.map((item) => ({ item, book, bwDir }));
+    const tasks = items.map((item) => ({ item, category: book.category, bwDir }));
     let done = 0;
     let failed = 0;
 
-    await runQueue(tasks, async ({ item, book, bwDir }) => {
+    await runQueue(tasks, async (task) => {
+      const { item, category, bwDir } = task;
       const outPath = path.join(bwDir, `${item}.png`);
-      const ok = await generateOne(zai, item, book.category, outPath);
+      console.log(`   ▶ generating ${item}…`);
+      const ok = await generateOne(zai, item, category, outPath);
       done++;
       if (!ok) failed++;
-      process.stdout.write(
-        `\r  [${done}/${items.length}] ${ok ? "✓" : "✗"} ${item}      `
-      );
-    });
+      console.log(`   ${ok ? "✓" : "✗"} ${item} [${done}/${items.length}]`);
+    }, CONCURRENCY);
 
-    console.log(`\n  ${book.slug}: ${done - failed} ok, ${failed} failed`);
+    console.log(`  ${book.slug}: ${done - failed} ok, ${failed} failed`);
+    totalOk += done - failed;
+    totalFailed += failed;
   }
 
   console.log(`\n✨ Image generation complete.`);
-  console.log(`   Run: bun run scripts/regenerate-pdfs-no-covers.ts\n`);
+  console.log(`   Total: ${totalOk} ok, ${totalFailed} failed`);
+  if (totalOk > 0) {
+    console.log(`   Next: bun run scripts/regenerate-pdfs-no-covers.ts${filter ? ` ${filter}${limit ? ` --limit=${limit}` : ""}` : ""}\n`);
+  }
 }
 
 main().catch((err) => {

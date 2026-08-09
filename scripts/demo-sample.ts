@@ -305,6 +305,7 @@ async function main() {
       timestamp: now.toISOString(),
       readableTime: formatReadableUTC(now),
       description: `${processed.length} pages — no covers, no blanks`,
+      items,
     });
 
     console.log(`   ✅ ${processed.length} pages, ${formatBytes(sizeBytes)}`);

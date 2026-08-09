@@ -107,3 +107,36 @@ Stage Summary:
 - All original QA issues resolved
 - Key new files: `scripts/silhouettes.ts`, category theme system in `coloring-data.ts`
 - Next opportunities (for future rounds): book detail preview modal, keyboard shortcuts, drag-to-reorder animation refinements, more book categories
+
+---
+Task ID: pets-ai-gen
+Agent: Z.ai Code (user-requested AI generation)
+Task: Add a NEW category (Pets), generate a 5-page book using real z-ai-web-dev-sdk AI image generation (not placeholders), and make it available in the app.
+
+Work Log:
+- Proposed 10 new categories (Pets, Farm Animals, Birds, Musical Instruments, Buildings, Toys, Weather, Sports, School Supplies, Christmas) — user picked Pets
+- Added Pets book to BOOKS array in coloring-data.ts (30 items: Dog, Cat, Hamster, Rabbit, Parrot, Goldfish, Guinea Pig, Ferret, Turtle, Chinchilla, etc.)
+- Added "Pets: pet" to CATEGORY_SUFFIX map
+- Added 30 natural color palettes for all Pets items (Dog=tan/brown, Cat=orange tabby, Parrot=red/blue/yellow, etc.)
+- Added Pets CategoryTheme (amber gradient, 🐶 emoji)
+- Added `items?: string[]` field to ColoringBookMeta interface (so the editor can show proper item labels)
+- Fixed generate-images.ts:
+  - Corrected SDK API: `response.data[0].base64` (was wrong: `b64_json`); removed `model`/`n` params (not supported)
+  - Added `--limit=N` CLI flag support
+  - Fixed critical bug: `runQueue(tasks, worker)` was missing the 3rd `concurrency` arg → workers never ran (0 ok, 0 failed)
+  - Added backoff retry for non-429 errors too
+- Added `--limit=N` CLI flag support to regenerate-pdfs-no-covers.ts
+- Updated both regenerate + demo scripts to include `items` array in metadata JSON
+- Ran `bun run scripts/generate-images.ts pets --limit=5` → generated 5 AI images (Dog, Cat, Hamster, Rabbit, Parrot) via z-ai-web-dev-sdk, 1024×1024, with 429 rate-limit retries handled automatically
+- Ran `bun run scripts/regenerate-pdfs-no-covers.ts pets --limit=5` → cleaned B&W (threshold+erode), auto-colorized with natural palettes, built 5-page PDF (231.6 KB), generated 5 thumbnails
+- VLM verified: Dog thumbnail shows colored reference (brown dog) + B&W line art + title "Dog" — rated 7/10
+- App now shows 7 books total (Pets at top, plus 6 existing placeholder books)
+
+Stage Summary:
+- **Status: AI IMAGE GENERATION PIPELINE VALIDATED**
+- First real AI-generated coloring book: Pets (5 pages)
+- SDK API confirmed working: `zai.images.generations.create({ prompt, size })` → `response.data[0].base64`
+- Full pipeline works end-to-end: AI image → clean B&W → colorize → PDF → thumbnails → app
+- 7 books now in the library (1 AI-generated + 6 placeholder)
+- Key fix: runQueue concurrency arg bug was preventing all AI generation
+- Next steps (if user approves): generate full 30-page Pets book, or add more categories with AI

@@ -24,6 +24,7 @@ export interface ColoringBookMeta {
   timestamp: string;    // ISO
   readableTime: string; // human-readable UTC
   description: string;
+  items?: string[];     // item labels for the editor (1:1 with pages)
 }
 
 // ---------------------------------------------------------------------------
@@ -41,6 +42,7 @@ const CATEGORY_SUFFIX: Record<string, string> = {
   "Fantasy Creatures": "fantasy creature",
   Space: "space object",
   "Food & Sweets": "food",
+  Pets: "pet",
 };
 
 export function categorySuffix(category: string): string {
@@ -189,6 +191,20 @@ export const BOOKS: ColoringBook[] = [
       "Bagel", "Pancake", "Waffle", "Chocolate", "Lollipop",
       "Candy", "Cotton Candy", "Popsicle", "Apple Pie", "Cheesecake",
       "Pretzel", "Popcorn", "Nachos", "Smoothie", "Milkshake",
+    ],
+  },
+  {
+    name: "Pets Coloring Book",
+    slug: "Pets",
+    category: "Pets",
+    description: "30 pages — no covers, no blanks",
+    items: [
+      "Dog", "Cat", "Hamster", "Rabbit", "Parrot",
+      "Goldfish", "Guinea Pig", "Ferret", "Turtle", "Chinchilla",
+      "Gerbil", "Mouse", "Canary", "Budgie", "Cockatiel",
+      "Bearded Dragon", "Corn Snake", "Leopard Gecko", "Betta Fish", "Koi Fish",
+      "Hedgehog", "Sugar Glider", "Pot-Bellied Pig", "Mini Goat", "Chick",
+      "Duckling", "Tarantula", "Snail", "Iguana", "Finch",
     ],
   },
 ];
@@ -494,6 +510,38 @@ export const NATURAL_PALETTES: Record<string, Palette> = {
   Pulsar: [[150, 200, 255], [100, 150, 220], [220, 235, 255]],
 
   // ---- Vehicles (no natural color — handled by fallback) ----
+
+  // ---- Pets & Domestic Animals ----
+  Dog: [[180, 130, 80], [140, 100, 60], [230, 200, 160]],       // tan body + dark ear + light belly
+  Cat: [[230, 140, 60], [200, 110, 40], [250, 230, 200]],        // orange tabby + dark stripes + light belly
+  Hamster: [[220, 170, 100], [180, 130, 70], [250, 230, 200]],   // golden body + dark + light belly
+  Rabbit: [[240, 240, 240], [210, 210, 210], [255, 200, 200]],   // white fur + grey shadow + pink inner ear
+  Parrot: [[220, 60, 60], [80, 140, 220], [255, 200, 50]],       // red body + blue wing + yellow tail
+  Goldfish: [[255, 140, 30], [255, 200, 50], [80, 130, 180]],    // orange body + yellow fin + blue water
+  "Guinea Pig": [[150, 100, 70], [100, 70, 50], [220, 190, 160]], // brown + dark patches + cream
+  Ferret: [[180, 150, 120], [120, 90, 70], [230, 220, 200]],     // sable body + dark mask + light belly
+  Turtle: [[80, 150, 80], [50, 110, 50], [200, 200, 150]],       // green shell + dark shell + tan skin
+  Chinchilla: [[180, 170, 170], [140, 130, 130], [220, 215, 215]], // grey fur + dark + light
+  Gerbil: [[200, 160, 110], [160, 120, 80], [240, 220, 190]],    // agouti + dark + light belly
+  Mouse: [[200, 190, 185], [160, 150, 145], [250, 200, 200]],    // grey + dark + pink ears
+  Canary: [[255, 220, 50], [230, 180, 30], [255, 250, 200]],     // yellow body + dark wing + light belly
+  Budgie: [[120, 200, 220], [80, 160, 200], [255, 255, 200]],    // turquoise body + dark wing + yellow face
+  Cockatiel: [[200, 180, 120], [140, 120, 80], [255, 220, 100]], // grey body + dark + yellow crest
+  "Bearded Dragon": [[210, 160, 80], [160, 110, 50], [240, 200, 130]], // tan + dark + light
+  "Corn Snake": [[220, 160, 80], [200, 80, 60], [250, 220, 180]], // orange + red saddles + light belly
+  "Leopard Gecko": [[255, 220, 120], [180, 130, 60], [240, 200, 130]], // yellow + dark spots + light
+  "Betta Fish": [[200, 60, 120], [140, 40, 90], [120, 180, 220]], // magenta body + dark + blue fin
+  "Koi Fish": [[255, 140, 30], [255, 255, 255], [40, 40, 40]],    // orange + white + black patches
+  Hedgehog: [[150, 120, 90], [100, 80, 60], [230, 210, 190]],    // brown spines + dark + cream face
+  "Sugar Glider": [[160, 130, 110], [120, 95, 80], [240, 230, 220]], // grey-brown + dark stripe + light belly
+  "Pot-Bellied Pig": [[120, 90, 80], [90, 65, 55], [180, 150, 140]], // dark grey + darker + light
+  "Mini Goat": [[240, 230, 220], [180, 160, 140], [60, 50, 40]],  // white + tan patches + dark hooves
+  Chick: [[255, 220, 80], [255, 180, 40], [255, 180, 60]],        // yellow body + dark wing + orange beak
+  Duckling: [[255, 220, 80], [255, 180, 40], [255, 160, 50]],     // yellow + dark + orange beak
+  Tarantula: [[100, 70, 50], [70, 45, 30], [160, 120, 90]],      // brown + dark + light hairs
+  Snail: [[180, 150, 100], [140, 110, 70], [220, 200, 160]],     // tan shell + dark + light body
+  Iguana: [[100, 160, 70], [60, 120, 50], [180, 200, 100]],      // green body + dark + light
+  Finch: [[180, 130, 80], [120, 80, 50], [240, 220, 180]],       // brown + dark + light belly
 };
 
 // ---------------------------------------------------------------------------
@@ -647,6 +695,12 @@ const CATEGORY_THEMES: Record<string, CategoryTheme> = {
     badgeBg: "bg-rose-50 border-rose-200",
     badgeText: "text-rose-700",
     emoji: "🍰",
+  },
+  Pets: {
+    gradient: "from-amber-400 to-orange-500",
+    badgeBg: "bg-amber-50 border-amber-200",
+    badgeText: "text-amber-700",
+    emoji: "🐶",
   },
 };
 

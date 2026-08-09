@@ -245,7 +245,10 @@ async function generateThumbnails(
 // ─────────────────────────────────────────────────────────────────────────
 
 async function main() {
-  const filter = process.argv[2]?.toLowerCase().trim();
+  const argv = process.argv.slice(2);
+  const filter = argv.find((a) => !a.startsWith("--"))?.toLowerCase().trim();
+  const limitArg = argv.find((a) => a.startsWith("--limit="));
+  const limit = limitArg ? parseInt(limitArg.slice(8), 10) : undefined;
 
   let booksToProcess = BOOKS;
   if (filter) {
@@ -262,7 +265,9 @@ async function main() {
   }
 
   console.log(`\n🎨 Coloring Book PDF Generator`);
-  console.log(`   Processing ${booksToProcess.length} book(s): ${booksToProcess.map((b) => b.slug).join(", ")}\n`);
+  console.log(`   Processing ${booksToProcess.length} book(s): ${booksToProcess.map((b) => b.slug).join(", ")}`);
+  if (limit) console.log(`   Limit: first ${limit} item(s) per book`);
+  console.log("");
 
   ensureDir(DOWNLOADS_DIR);
   ensureDir(COLORING_BOOKS_DIR);
@@ -282,11 +287,13 @@ async function main() {
   const results: ColoringBookMeta[] = [];
 
   for (const book of booksToProcess) {
-    console.log(`\n📖 ${book.name} (${book.items.length} items)`);
+    let items = book.items;
+    if (limit && limit > 0) {
+      items = items.slice(0, limit);
+    }
+    console.log(`\n📖 ${book.name} (${items.length} items)`);
     const now = new Date();
 
-    // For full runs we use all 30 items. The demo script overrides this.
-    const items = book.items;
     const { pdfPath, pageCount, sizeBytes } = await buildBookPdf(book, items);
 
     await generateThumbnails(pdfPath, book.slug, pageCount);
@@ -302,7 +309,10 @@ async function main() {
       category: book.category,
       timestamp: now.toISOString(),
       readableTime: formatReadableUTC(now),
-      description: book.description,
+      description: items.length === book.items.length
+        ? book.description
+        : `${items.length} pages — no covers, no blanks`,
+      items,
     });
 
     console.log(`  ✅ ${book.name}: ${pageCount} pages, ${formatBytes(sizeBytes)}`);
