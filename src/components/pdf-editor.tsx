@@ -133,7 +133,9 @@ export function PdfEditor() {
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
-      const list: BookMeta[] = Array.isArray(data) ? data : data.books ?? [];
+      const allBooks: BookMeta[] = Array.isArray(data) ? data : data.books ?? [];
+      // SelectStep: only show interior coloring books (covers are in Merge Books)
+      const list: BookMeta[] = allBooks.filter((b) => b.category !== "Cover");
       setBooks(list);
     } catch {
       setBooks([]);

@@ -85,7 +85,9 @@ export function ColoringBookGenerator() {
         throw new Error(`HTTP ${res.status}`);
       }
       const data = await res.json();
-      const list: BookMeta[] = Array.isArray(data) ? data : data.books ?? [];
+      const allBooks: BookMeta[] = Array.isArray(data) ? data : data.books ?? [];
+      // Tab 1: only show interior coloring books (hide covers — those are in Merge Books)
+      const list: BookMeta[] = allBooks.filter((b) => b.category !== "Cover");
       setBooks(list);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Failed to load books");
