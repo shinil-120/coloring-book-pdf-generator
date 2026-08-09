@@ -423,11 +423,17 @@ export function CoverGenerator({
                 <div className="flex h-full flex-1 flex-col items-center justify-center gap-1 p-2">
                   {designStyle === "gallery" && bookPages.length > 0 ? (
                     <>
-                      {/* Gallery: 3×2 grid */}
+                      {/* Gallery: 3×2 grid — show only colored reference (top-left crop) */}
                       <div className="grid grid-cols-3 gap-0.5 w-full mb-1">
                         {bookPages.slice(0, 6).map((p, i) => (
                           <div key={i} className="aspect-square overflow-hidden">
-                            <img src={p.thumbnail} alt="" className="h-full w-full object-cover opacity-90" loading="lazy" />
+                            <img
+                              src={p.thumbnail}
+                              alt=""
+                              className="h-full w-full object-cover opacity-90"
+                              loading="lazy"
+                              style={{ objectPosition: "top left", objectFit: "cover", transform: "scale(3.5)", transformOrigin: "top left" }}
+                            />
                           </div>
                         ))}
                       </div>
@@ -435,7 +441,7 @@ export function CoverGenerator({
                     </>
                   ) : (designStyle === "zigzag" || designStyle === "zigzag-mixed") && bookPages.length > 0 ? (
                     <>
-                      {/* Zigzag: alternating left/right with varying sizes */}
+                      {/* Zigzag: alternating left/right with varying sizes — colored only */}
                       <div className="relative w-full h-full">
                         {bookPages.slice(0, 6).map((p, i) => {
                           const sizes = ["w-1/3", "w-1/4", "w-1/5", "w-1/4", "w-1/5", "w-1/6"];
@@ -447,7 +453,13 @@ export function CoverGenerator({
                               className={`absolute ${sizes[i % sizes.length]} aspect-square overflow-hidden ${isLeft ? "left-0" : "right-0"}`}
                               style={{ top: `${10 + i * 14}%` }}
                             >
-                              <img src={p.thumbnail} alt="" className={`h-full w-full object-cover ${isColored ? "opacity-90" : "opacity-40"}`} loading="lazy" />
+                              <img
+                                src={p.thumbnail}
+                                alt=""
+                                className={`h-full w-full ${isColored ? "opacity-90" : "opacity-40"}`}
+                                loading="lazy"
+                                style={{ objectPosition: "top left", objectFit: "cover", transform: "scale(3.5)", transformOrigin: "top left" }}
+                              />
                             </div>
                           );
                         })}
