@@ -15,6 +15,8 @@ import {
   Images,
   Rows3,
   Type,
+  Zap,
+  ZapOff,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -59,6 +61,8 @@ const DESIGN_STYLES = [
   { id: "gallery", name: "Gallery", icon: LayoutGrid, desc: "3×2 thumbnail grid" },
   { id: "collage", name: "Collage", icon: Images, desc: "Overlapping images" },
   { id: "banner", name: "Banner", icon: Rows3, desc: "Horizontal strip" },
+  { id: "zigzag", name: "Zigzag", icon: Zap, desc: "Colored, varied sizes" },
+  { id: "zigzag-mixed", name: "Mixed Zigzag", icon: ZapOff, desc: "Colored + B&W mix" },
 ];
 
 // Color themes
@@ -325,7 +329,7 @@ export function CoverGenerator({
             <Label className="mb-2 block text-xs font-bold uppercase tracking-wide text-stone-500">
               2. Choose Design Style
             </Label>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
               {DESIGN_STYLES.map((style) => {
                 const Icon = style.icon;
                 const isSelected = designStyle === style.id;
@@ -421,9 +425,9 @@ export function CoverGenerator({
                 <div className="h-full shrink-0" style={{ width: `${(pageCount * 0.002252 / (8.5 + pageCount * 0.002252 + 8.5)) * 100}%`, minWidth: "3px", background: "rgba(0,0,0,0.2)" }} />
                 {/* Front cover — design-specific preview */}
                 <div className="flex h-full flex-1 flex-col items-center justify-center gap-1 p-2">
-                  {designStyle !== "classic" && bookPages.length > 0 ? (
+                  {designStyle === "gallery" && bookPages.length > 0 ? (
                     <>
-                      {/* Thumbnail grid preview */}
+                      {/* Gallery: 3×2 grid */}
                       <div className="grid grid-cols-3 gap-0.5 w-full mb-1">
                         {bookPages.slice(0, 6).map((p, i) => (
                           <div key={i} className="aspect-square overflow-hidden rounded-sm">
@@ -432,7 +436,39 @@ export function CoverGenerator({
                         ))}
                       </div>
                       <span className="text-center text-[7px] font-extrabold leading-tight text-white drop-shadow">{title || "Title"}</span>
-                      {subtitle && <span className="text-center text-[5px] text-white/80">{subtitle}</span>}
+                    </>
+                  ) : (designStyle === "collage" || designStyle === "banner") && bookPages.length > 0 ? (
+                    <>
+                      {/* Collage/Banner: scattered/strip thumbnails */}
+                      <div className={`flex ${designStyle === "banner" ? "flex-row" : "flex-wrap"} gap-0.5 w-full mb-1 justify-center`}>
+                        {bookPages.slice(0, 6).map((p, i) => (
+                          <div key={i} className={`${designStyle === "banner" ? "w-1/6" : designStyle === "collage" && (i % 2 === 0 ? "w-1/3" : "w-1/4")} aspect-square overflow-hidden rounded-sm`}>
+                            <img src={p.thumbnail} alt="" className="h-full w-full object-cover opacity-70" loading="lazy" />
+                          </div>
+                        ))}
+                      </div>
+                      <span className="text-center text-[7px] font-extrabold leading-tight text-white drop-shadow">{title || "Title"}</span>
+                    </>
+                  ) : (designStyle === "zigzag" || designStyle === "zigzag-mixed") && bookPages.length > 0 ? (
+                    <>
+                      {/* Zigzag: alternating left/right with varying sizes */}
+                      <div className="relative w-full h-full">
+                        {bookPages.slice(0, 6).map((p, i) => {
+                          const sizes = ["w-1/3", "w-1/4", "w-1/5", "w-1/4", "w-1/5", "w-1/6"];
+                          const isLeft = i % 2 === 0;
+                          const isColored = designStyle === "zigzag" || i % 2 === 0;
+                          return (
+                            <div
+                              key={i}
+                              className={`absolute ${sizes[i % sizes.length]} aspect-square overflow-hidden rounded-sm ${isLeft ? "left-0" : "right-0"}`}
+                              style={{ top: `${10 + i * 14}%` }}
+                            >
+                              <img src={p.thumbnail} alt="" className={`h-full w-full object-cover ${isColored ? "opacity-90" : "opacity-40"}`} loading="lazy" />
+                            </div>
+                          );
+                        })}
+                      </div>
+                      <span className="text-center text-[7px] font-extrabold leading-tight text-white drop-shadow">{title || "Title"}</span>
                     </>
                   ) : (
                     <>

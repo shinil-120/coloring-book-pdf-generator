@@ -235,6 +235,83 @@ export async function POST(req: NextRequest) {
       drawCenteredText(page, helveticaBold, author, 20, frontX + 40, 60, PAGE_W - 80, white);
     }
 
+    // ── Design Style: "zigzag" (zigzag colored thumbnails, varied sizes) ─
+    else if (designStyle === "zigzag" && embeddedThumbs.length > 0) {
+      // Title at top
+      drawCenteredText(page, helveticaBold, title, 36, frontX + 40, COVER_H - 70, PAGE_W - 80, white);
+      if (subtitle) drawCenteredText(page, helvetica, subtitle, 14, frontX + 40, COVER_H - 105, PAGE_W - 80, white);
+
+      // Zigzag arrangement: thumbnails alternate left/right with varying sizes
+      // Scale pattern: large, medium, small, large, medium, small...
+      const scales = [0.30, 0.22, 0.16, 0.25, 0.20, 0.14];
+      const startY = COVER_H - 140;
+      const endY = 100;
+      const totalH = startY - endY;
+      const stepY = totalH / embeddedThumbs.length;
+
+      embeddedThumbs.forEach((thumb, i) => {
+        const scale = scales[i % scales.length];
+        const sz = PAGE_W * scale;
+        // Alternate left and right
+        const isLeft = i % 2 === 0;
+        const margin = 30;
+        const cx = isLeft
+          ? frontX + margin
+          : frontX + PAGE_W - margin - sz;
+        const cy = startY - (i + 1) * stepY + (stepY - sz) / 2;
+
+        page.drawImage(thumb.jpg, {
+          x: cx,
+          y: cy,
+          width: sz,
+          height: sz,
+          opacity: 0.9,
+        });
+      });
+
+      // Author at bottom
+      drawCenteredText(page, helveticaBold, author, 18, frontX + 40, 50, PAGE_W - 80, white);
+    }
+
+    // ── Design Style: "zigzag-mixed" (alternating colored/B&W, varied scale) ─
+    else if (designStyle === "zigzag-mixed" && embeddedThumbs.length > 0) {
+      // Title at top
+      drawCenteredText(page, helveticaBold, title, 36, frontX + 40, COVER_H - 70, PAGE_W - 80, white);
+      if (subtitle) drawCenteredText(page, helvetica, subtitle, 14, frontX + 40, COVER_H - 105, PAGE_W - 80, white);
+
+      // Mixed zigzag: alternate between colored (full opacity) and B&W (greyed)
+      // Scale pattern: varied sizes — big, small, medium, big, small...
+      const scales = [0.32, 0.18, 0.25, 0.15, 0.22, 0.28];
+      const startY = COVER_H - 140;
+      const endY = 100;
+      const totalH = startY - endY;
+      const stepY = totalH / embeddedThumbs.length;
+
+      embeddedThumbs.forEach((thumb, i) => {
+        const scale = scales[i % scales.length];
+        const sz = PAGE_W * scale;
+        const isLeft = i % 2 === 0;
+        const margin = 25;
+        const cx = isLeft
+          ? frontX + margin
+          : frontX + PAGE_W - margin - sz;
+        const cy = startY - (i + 1) * stepY + (stepY - sz) / 2;
+
+        // Alternate: even = colored (full opacity), odd = B&W effect (grey opacity)
+        const isColored = i % 2 === 0;
+        page.drawImage(thumb.jpg, {
+          x: cx,
+          y: cy,
+          width: sz,
+          height: sz,
+          opacity: isColored ? 0.9 : 0.4,
+        });
+      });
+
+      // Author at bottom
+      drawCenteredText(page, helveticaBold, author, 18, frontX + 40, 50, PAGE_W - 80, white);
+    }
+
     // Fallback: classic layout (if no thumbnails for gallery/collage/banner)
     else {
       page.drawRectangle({ x: frontX + 50, y: COVER_H - COVER_H * 0.28 - 3, width: PAGE_W - 100, height: 3, color: rgb(1, 1, 1), opacity: 0.25 });
