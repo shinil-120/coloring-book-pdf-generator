@@ -3,12 +3,12 @@
 
 generator client {
   provider = "prisma-client-js"
+  previewFeatures = ["driverAdapters"]
 }
 
 datasource db {
-  provider  = "libsql"
-  url       = env("TURSO_DATABASE_URL")
-  directUrl = env("TURSO_DIRECT_URL")
+  provider = "sqlite"
+  url      = "file:./dummy.db"
 }
 
 model ColoringBook {

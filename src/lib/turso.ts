@@ -1,39 +1,42 @@
 /**
  * Turso (libSQL) data access layer for coloring book metadata.
  *
- * Uses Prisma Client with the libSQL adapter. All book metadata (name,
- * slug, category, pages, items, PDF URL) is stored in Turso. The actual
- * PDF and thumbnail files are stored in Vercel Blob (see blob-storage.ts).
+ * Uses @libsql/client directly (no Prisma driver adapter needed). All book
+ * metadata (name, slug, category, pages, items, PDF URL) is stored in
+ * Turso. The actual PDF and thumbnail files are stored in Vercel Blob.
+ *
+ * This module exports a typed data-access API. If Turso is not configured
+ * (no TURSO_DATABASE_URL), `getClient()` returns null and the app falls
+ * back to reading the local JSON file.
  */
-import { PrismaClient } from "@prisma/client";
-import { PrismaLibSql } from "@prisma/adapter-libsql";
-import { createClient } from "@libsql/client";
+import { createClient, type Client } from "@libsql/client";
 
-// Singleton Prisma client (avoid multiple instances in dev hot reload)
-const globalForPrisma = globalThis as unknown as { prisma?: PrismaClient };
+// Singleton client (avoid multiple instances in dev hot reload)
+const globalForTurso = globalThis as unknown as { tursoClient?: Client | null };
 
-function createPrismaClient(): PrismaClient | null {
+function createTursoClient(): Client | null {
   const url = process.env.TURSO_DATABASE_URL;
   if (!url) {
-    // No Turso configured — return null (app falls back to local JSON)
-    return null;
+    return null; // Turso not configured — app falls back to local JSON
   }
   const authToken = process.env.TURSO_AUTH_TOKEN;
-  const directUrl = process.env.TURSO_DIRECT_URL || url;
-
-  const libsql = createClient({ url: directUrl, authToken });
-  const adapter = new PrismaLibSql(libsql);
-  return new PrismaClient({ adapter });
+  return createClient({ url, authToken });
 }
 
-export const prisma = globalForPrisma.prisma ?? createPrismaClient();
+export const turso: Client | null =
+  globalForTurso.tursoClient ?? createTursoClient();
 
-if (process.env.NODE_ENV !== "production" && prisma) {
-  globalForPrisma.prisma = prisma;
+if (process.env.NODE_ENV !== "production" && turso) {
+  globalForTurso.tursoClient = turso;
+}
+
+/** Check if Turso is configured. */
+export function isTursoConfigured(): boolean {
+  return !!process.env.TURSO_DATABASE_URL && !!turso;
 }
 
 // ────────────────────────────────────────────────────────────────────────
-// Book metadata types (mirror the JSON format for backward compatibility)
+// Book metadata types
 // ────────────────────────────────────────────────────────────────────────
 
 export interface BookMeta {
@@ -52,7 +55,7 @@ export interface BookMeta {
 }
 
 // ────────────────────────────────────────────────────────────────────────
-// CRUD operations
+// Helpers
 // ────────────────────────────────────────────────────────────────────────
 
 function formatBytes(bytes: number): string {
@@ -72,8 +75,7 @@ function formatReadableUTC(d: Date): string {
   return `${months[d.getUTCMonth()]} ${d.getUTCDate()}, ${d.getUTCFullYear()}, ${pad(h12)}:${pad(d.getUTCMinutes())} ${ap} UTC`;
 }
 
-/** Convert a Prisma ColoringBook record to the BookMeta format. */
-function toBookMeta(b: {
+interface DbRow {
   id: string;
   slug: string;
   name: string;
@@ -82,46 +84,57 @@ function toBookMeta(b: {
   pages: number;
   sizeBytes: number;
   pdfUrl: string;
+  thumbnailUrl: string | null;
   items: string;
-  createdAt: Date;
-}): BookMeta {
+  createdAt: string;
+}
+
+function toBookMeta(row: DbRow): BookMeta {
   let items: string[] = [];
   try {
-    items = JSON.parse(b.items);
+    items = JSON.parse(row.items);
   } catch {
     items = [];
   }
   return {
-    id: b.id,
-    name: b.name,
-    url: b.pdfUrl,
-    slug: b.slug,
-    size: formatBytes(b.sizeBytes),
-    sizeBytes: b.sizeBytes,
-    pages: b.pages,
-    category: b.category,
-    timestamp: b.createdAt.toISOString(),
-    readableTime: formatReadableUTC(b.createdAt),
-    description: b.description,
+    id: row.id,
+    name: row.name,
+    url: row.pdfUrl,
+    slug: row.slug,
+    size: formatBytes(row.sizeBytes),
+    sizeBytes: row.sizeBytes,
+    pages: row.pages,
+    category: row.category,
+    timestamp: new Date(row.createdAt).toISOString(),
+    readableTime: formatReadableUTC(new Date(row.createdAt)),
+    description: row.description,
     items,
   };
 }
 
+// ────────────────────────────────────────────────────────────────────────
+// CRUD operations
+// ────────────────────────────────────────────────────────────────────────
+
 /** List all coloring books, newest first. */
 export async function listBooks(): Promise<BookMeta[]> {
-  if (!prisma) return [];
-  const books = await prisma.coloringBook.findMany({
-    orderBy: { createdAt: "desc" },
-    take: 10,
+  if (!turso) return [];
+  const result = await turso.execute({
+    sql: "SELECT * FROM ColoringBook ORDER BY createdAt DESC LIMIT 10",
+    args: [],
   });
-  return books.map(toBookMeta);
+  return result.rows.map((row) => toBookMeta(row as unknown as DbRow));
 }
 
 /** Get a single book by slug. */
 export async function getBook(slug: string): Promise<BookMeta | null> {
-  if (!prisma) return null;
-  const book = await prisma.coloringBook.findUnique({ where: { slug } });
-  return book ? toBookMeta(book) : null;
+  if (!turso) return null;
+  const result = await turso.execute({
+    sql: "SELECT * FROM ColoringBook WHERE slug = ?",
+    args: [slug],
+  });
+  if (result.rows.length === 0) return null;
+  return toBookMeta(result.rows[0] as unknown as DbRow);
 }
 
 /** Create or update a book record (upsert by slug). */
@@ -135,32 +148,46 @@ export async function upsertBook(meta: {
   pdfUrl: string;
   items: string[];
 }): Promise<BookMeta> {
-  if (!prisma) throw new Error("Turso not configured");
+  if (!turso) throw new Error("Turso not configured");
 
-  // Delete existing (if any) then create — simpler than upsert with all fields
-  await prisma.coloringBook.deleteMany({ where: { slug: meta.slug } });
-  const book = await prisma.coloringBook.create({
-    data: {
-      slug: meta.slug,
-      name: meta.name,
-      category: meta.category,
-      description: meta.description,
-      pages: meta.pages,
-      sizeBytes: meta.sizeBytes,
-      pdfUrl: meta.pdfUrl,
-      items: JSON.stringify(meta.items),
-    },
+  // Delete existing (if any) then create
+  await turso.execute({
+    sql: "DELETE FROM ColoringBook WHERE slug = ?",
+    args: [meta.slug],
   });
-  return toBookMeta(book);
+
+  const id = crypto.randomUUID();
+  await turso.execute({
+    sql: `INSERT INTO ColoringBook (id, slug, name, category, description, pages, sizeBytes, pdfUrl, items, createdAt, updatedAt)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    args: [
+      id,
+      meta.slug,
+      meta.name,
+      meta.category,
+      meta.description,
+      meta.pages,
+      meta.sizeBytes,
+      meta.pdfUrl,
+      JSON.stringify(meta.items),
+      new Date().toISOString(),
+      new Date().toISOString(),
+    ],
+  });
+
+  return (await getBook(meta.slug))!;
 }
 
 /** Delete a book by slug. */
 export async function deleteBook(slug: string): Promise<void> {
-  if (!prisma) return;
-  await prisma.coloringBook.deleteMany({ where: { slug } });
+  if (!turso) return;
+  await turso.execute({
+    sql: "DELETE FROM ColoringBook WHERE slug = ?",
+    args: [slug],
+  });
 }
 
-/** Check if Turso is configured. */
-export function isTursoConfigured(): boolean {
-  return !!process.env.TURSO_DATABASE_URL;
-}
+// ────────────────────────────────────────────────────────────────────────
+// Prisma re-export for backward compatibility (db.ts imports this)
+// ────────────────────────────────────────────────────────────────────────
+export { turso as prisma };
