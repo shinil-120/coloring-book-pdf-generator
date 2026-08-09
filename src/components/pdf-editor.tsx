@@ -117,9 +117,9 @@ export function PdfEditor() {
   // Drag state
   const [activeId, setActiveId] = useState<string | null>(null);
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } }),
+    useSensor(PointerSensor, { activationConstraint: { distance: 3 } }),
     useSensor(TouchSensor, {
-      activationConstraint: { delay: 150, tolerance: 8 },
+      activationConstraint: { delay: 100, tolerance: 5 },
     }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
   );
@@ -844,15 +844,16 @@ function SortablePageCard({
         {...attributes}
         {...listeners}
         aria-label="Drag to reorder"
-        className="absolute -right-2 -top-2 z-10 flex h-8 w-8 cursor-grab items-center justify-center rounded-full bg-white text-stone-500 shadow-md ring-2 ring-white transition-all hover:bg-violet-50 hover:text-violet-600 active:cursor-grabbing group-hover:scale-110"
+        style={{ touchAction: "none" }}
+        className="absolute -right-2 -top-2 z-20 flex h-9 w-9 cursor-grab items-center justify-center rounded-full bg-white text-stone-500 shadow-md ring-2 ring-white transition-all hover:bg-violet-50 hover:text-violet-600 active:cursor-grabbing group-hover:scale-110"
       >
         <GripVertical className="h-4 w-4" />
       </button>
 
       <PageCardVisual page={page} position={position} onPreview={onPreview} />
 
-      {/* Action buttons — always visible on mobile, hover-reveal on desktop */}
-      <div className="mt-2 flex items-center gap-1.5 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100">
+      {/* Action buttons — always visible (no hover-reveal) */}
+      <div className="mt-2 flex items-center gap-1.5">
         <Button
           onClick={onDuplicate}
           size="sm"
@@ -886,11 +887,9 @@ function PageCardVisual({
 }) {
   return (
     <>
-      {/* Thumbnail — clickable to open full-size preview (only for non-blank) */}
-      <button
-        type="button"
+      {/* Thumbnail — clickable div (not button, to avoid drag conflicts) */}
+      <div
         onClick={onPreview && !page.isBlank ? onPreview : undefined}
-        disabled={page.isBlank || !onPreview}
         className={
           "relative flex h-[112px] w-full items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br transition-all " +
           (page.isBlank
@@ -898,6 +897,7 @@ function PageCardVisual({
             : "from-stone-50 to-white cursor-pointer hover:ring-2 hover:ring-violet-200") +
           (onPreview && !page.isBlank ? " group/thumb" : "")
         }
+        role={page.isBlank ? undefined : "button"}
         aria-label={page.isBlank ? "Blank page" : `Preview page ${position}`}
       >
         {page.isBlank ? (
@@ -918,7 +918,7 @@ function PageCardVisual({
             />
             {/* Hover overlay */}
             {onPreview && (
-              <div className="absolute inset-0 flex items-center justify-center bg-stone-900/0 opacity-0 transition-all group-hover/thumb:bg-stone-900/15 group-hover/thumb:opacity-100">
+              <div className="pointer-events-none absolute inset-0 flex items-center justify-center bg-stone-900/0 opacity-0 transition-all group-hover/thumb:bg-stone-900/15 group-hover/thumb:opacity-100">
                 <div className="flex items-center gap-1 rounded-full bg-white/95 px-2.5 py-1 text-[10px] font-bold text-stone-700 shadow-md">
                   <Eye className="h-3 w-3 text-violet-500" />
                   View
@@ -931,7 +931,7 @@ function PageCardVisual({
             <FileText className="h-6 w-6" />
           </div>
         )}
-      </button>
+      </div>
 
       {/* Label */}
       <div className="mt-1.5 truncate px-0.5 text-center text-xs font-bold text-stone-700">
