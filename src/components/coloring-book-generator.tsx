@@ -529,7 +529,10 @@ function BookRow({
   onToggleSelect: () => void;
 }) {
   const theme = getCategoryTheme(book.category);
-  const thumb = `/downloads/thumbnails/${book.slug}/page-1.png`;
+  // Use book.url if it's a Blob URL, otherwise local path
+  const thumb = book.url && book.url.startsWith("http")
+    ? book.url.replace(/\/pdfs\/.*$/, `/thumbnails/${book.slug}/page-1.png?t=${Date.now()}`)
+    : `/downloads/thumbnails/${book.slug}/page-1.png`;
 
   return (
     <div
@@ -764,8 +767,10 @@ function BookCard({
 }) {
   const theme = getCategoryTheme(book.category);
 
-  // Thumbnail path
-  const thumb = `/downloads/thumbnails/${book.slug}/page-1.png`;
+  // Thumbnail path — use Blob URL if available, with cache-busting
+  const thumb = book.url && book.url.startsWith("http")
+    ? book.url.replace(/\/pdfs\/.*$/, `/thumbnails/${book.slug}/page-1.png?t=${Date.now()}`)
+    : `/downloads/thumbnails/${book.slug}/page-1.png`;
 
   return (
     <Card

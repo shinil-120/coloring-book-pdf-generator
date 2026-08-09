@@ -60,13 +60,15 @@ export async function POST(req: NextRequest) {
 
       const pageCount = book.pages;
       const items = book.items ?? [];
+      const isBlob = thumbnailBaseUrl.startsWith("http");
+      const cacheBust = isBlob ? `?t=${Date.now()}` : "";
       const pages: PageData[] = [];
       for (let i = 0; i < pageCount; i++) {
         pages.push({
           index: i,
           pageNumber: i + 1,
           label: items[i] ?? `Page ${i + 1}`,
-          thumbnail: `${thumbnailBaseUrl}/page-${i + 1}.png`,
+          thumbnail: `${thumbnailBaseUrl}/page-${i + 1}.png${cacheBust}`,
         });
       }
 

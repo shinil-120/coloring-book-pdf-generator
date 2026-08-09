@@ -46,8 +46,9 @@ export async function POST(req: NextRequest) {
     let slug: string;
 
     if (pdfPath.startsWith("http://") || pdfPath.startsWith("https://")) {
-      // Remote URL (Vercel Blob) — fetch it
-      const res = await fetch(pdfPath);
+      // Remote URL (Vercel Blob) — fetch it with cache-busting
+      const cacheBustUrl = pdfPath + (pdfPath.includes("?") ? "&" : "?") + "t=" + Date.now();
+      const res = await fetch(cacheBustUrl, { cache: "no-store" });
       if (!res.ok) {
         return NextResponse.json(
           { success: false, error: `Failed to fetch PDF: HTTP ${res.status}` },
@@ -127,6 +128,8 @@ export async function POST(req: NextRequest) {
     }
 
     // ── Build page list ────────────────────────────────────────────────
+    // Cache-bust token for Blob thumbnails (prevents browser showing stale images)
+    const cacheBust = thumbnailBaseUrl ? `?t=${Date.now()}` : "";
     const pageList: EditPage[] = [];
     for (let i = 0; i < pageCount; i++) {
       const p = pages[i];
@@ -136,7 +139,7 @@ export async function POST(req: NextRequest) {
       // Thumbnail URL: Blob URL (if from Turso) or local path
       let thumbnail: string;
       if (thumbnailBaseUrl) {
-        thumbnail = `${thumbnailBaseUrl}/page-${i + 1}.png`;
+        thumbnail = `${thumbnailBaseUrl}/page-${i + 1}.png${cacheBust}`;
       } else {
         thumbnail = `/downloads/thumbnails/${slug}/page-${i + 1}.png`;
       }
