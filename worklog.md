@@ -235,3 +235,56 @@ Stage Summary:
 - All existing functionality preserved (search, filter, grid/list, drag-and-drop, add blanks, assemble)
 - Key new files: `src/components/book-preview-modal.tsx`, `src/app/api/book-pages/route.ts`
 - Next opportunities: book detail page, batch download, custom page upload, print preview
+
+---
+Task ID: cron-review-3
+Agent: Z.ai Code (webDevReview cron — round 3)
+Task: Assess project status, perform QA testing, add new features (batch download, sort, selection mode).
+
+Work Log:
+- Reviewed worklog — project had 7 books, book preview modal, editor page preview modal, all working
+- QA tested with agent-browser + VLM: Tab 1 (7 books, preview modal), Tab 2 (editor flow), all stable, no errors
+- VLM identified feature gaps: batch download, advanced filtering/sorting
+
+New features implemented this round:
+1. **Batch Selection Mode + ZIP Download** — select multiple books and download them all as a single ZIP:
+   - "Select" toggle button in hero banner (violet gradient when active)
+   - Checkbox overlay on each book card (top-right) in select mode
+   - List view (BookRow) shows a checkbox at the start of each row
+   - Selected cards get violet border + ring + lift effect
+   - Sticky BatchToolbar appears when select mode is on: shows "X books selected of Y shown", Select all / Deselect all / Clear / Download as ZIP buttons
+   - "Download N as ZIP" button calls POST /api/batch-download → returns ZIP file
+   - Created new API route `/api/batch-download` using JSZip to bundle multiple PDFs
+   - Installed `jszip` package
+   - Success toast on download, auto-exits select mode after download
+
+2. **Sort Dropdown** — sort the book list by:
+   - Newest first (date-desc, default)
+   - Oldest first (date-asc)
+   - Name (A-Z)
+   - Most pages
+   - Largest size
+   - Added to SearchBar as a shadcn Select component with ArrowDownUp icon
+   - Sort applies after search + category filter
+
+3. **Count-up animation for stats** (already had stagger animations from prior rounds)
+
+QA verification:
+- Sort dropdown: VLM confirmed "Newest first" visible in SearchBar
+- Select button: VLM confirmed visible in hero banner
+- Select mode: clicking "Select" shows checkboxes on cards + sticky BatchToolbar
+- Selected 3 books → "Download 3 as ZIP" button enabled → clicked → success toast appeared
+- Batch API: curl test returned valid ZIP (533KB, HTTP 200) containing Pets + Dinosaurs PDFs
+- Clean lint (0 errors, 0 warnings)
+- Dev log: POST /api/batch-download 200 in 899ms
+
+Stage Summary:
+- **Status: BATCH OPERATIONS + SORTING ADDED**
+- 2 new high-value features: batch ZIP download + sort dropdown
+- New API route `/api/batch-download` (JSZip-based)
+- New `BatchToolbar` component with select all/clear/download actions
+- Select mode toggles checkboxes on all cards + list rows
+- VLM design rating: 8/10 (stable, functional)
+- All existing features preserved (search, filter, grid/list, preview modals, drag-and-drop editor)
+- Key new files: `src/app/api/batch-download/route.ts`, `BatchToolbar` component
+- Next opportunities: custom page upload, print preview, book compilation/merge, export to other formats

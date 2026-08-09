@@ -17,11 +17,22 @@ import {
   Grid3x3,
   List,
   Eye,
+  CheckSquare,
+  ArrowDownUp,
+  Package,
+  CheckCircle2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Card,
   CardContent,
@@ -55,6 +66,12 @@ export function ColoringBookGenerator() {
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [previewBook, setPreviewBook] = useState<BookMeta | null>(null);
   const [previewOpen, setPreviewOpen] = useState(false);
+  const [sortBy, setSortBy] = useState<"date-desc" | "date-asc" | "name" | "pages" | "size">("date-desc");
+
+  // Batch selection state
+  const [selectMode, setSelectMode] = useState(false);
+  const [selectedSlugs, setSelectedSlugs] = useState<Set<string>>(new Set());
+  const [batchDownloading, setBatchDownloading] = useState(false);
 
   const fetchBooks = useCallback(async () => {
     setLoading(true);
@@ -105,10 +122,10 @@ export function ColoringBookGenerator() {
     return Array.from(set).sort();
   }, [books]);
 
-  // Filtered + searched books
+  // Filtered + searched + sorted books
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return books.filter((b) => {
+    const result = books.filter((b) => {
       if (activeCategory !== "all" && b.category !== activeCategory) return false;
       if (!q) return true;
       return (
@@ -117,7 +134,83 @@ export function ColoringBookGenerator() {
         b.description.toLowerCase().includes(q)
       );
     });
-  }, [books, search, activeCategory]);
+    // Sort
+    const sorted = [...result];
+    switch (sortBy) {
+      case "date-desc":
+        sorted.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+        break;
+      case "date-asc":
+        sorted.sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+        break;
+      case "name":
+        sorted.sort((a, b) => a.name.localeCompare(b.name));
+        break;
+      case "pages":
+        sorted.sort((a, b) => b.pages - a.pages);
+        break;
+      case "size":
+        sorted.sort((a, b) => (b.sizeBytes || 0) - (a.sizeBytes || 0));
+        break;
+    }
+    return sorted;
+  }, [books, search, activeCategory, sortBy]);
+
+  // Batch selection handlers
+  const toggleSelect = useCallback((slug: string) => {
+    setSelectedSlugs((prev) => {
+      const next = new Set(prev);
+      if (next.has(slug)) next.delete(slug);
+      else next.add(slug);
+      return next;
+    });
+  }, []);
+
+  const selectAll = useCallback(() => {
+    setSelectedSlugs(new Set(filtered.map((b) => b.slug)));
+  }, [filtered]);
+
+  const clearSelection = useCallback(() => {
+    setSelectedSlugs(new Set());
+  }, []);
+
+  const handleBatchDownload = useCallback(async () => {
+    if (selectedSlugs.size === 0) return;
+    setBatchDownloading(true);
+    try {
+      const slugs = Array.from(selectedSlugs);
+      const res = await fetch("/api/batch-download", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slugs }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error || `HTTP ${res.status}`);
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      const ts = new Date().toISOString().slice(0, 10);
+      a.download = `coloring-books-${ts}.zip`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+      toast.success(`Downloaded ${slugs.length} books as ZIP`, {
+        description: `coloring-books-${ts}.zip`,
+      });
+      setSelectMode(false);
+      clearSelection();
+    } catch (e) {
+      toast.error("Batch download failed", {
+        description: e instanceof Error ? e.message : "Unknown error",
+      });
+    } finally {
+      setBatchDownloading(false);
+    }
+  }, [selectedSlugs, clearSelection]);
 
   return (
     <div className="space-y-6">
@@ -139,14 +232,33 @@ export function ColoringBookGenerator() {
               clean B&amp;W line art, and the item title. No covers, no blanks.
             </p>
           </div>
-          <Button
-            onClick={fetchBooks}
-            variant="outline"
-            className="h-11 shrink-0 gap-2 rounded-full border-rose-200 bg-white/80 px-5 text-sm font-bold text-stone-700 hover:bg-rose-50 hover:text-rose-600"
-          >
-            <RefreshCw className={loading ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
-            Refresh
-          </Button>
+          <div className="flex shrink-0 items-center gap-2">
+            {!loading && !error && books.length > 0 && (
+              <Button
+                onClick={() => {
+                  setSelectMode((v) => !v);
+                  if (selectMode) clearSelection();
+                }}
+                variant={selectMode ? "default" : "outline"}
+                className={
+                  selectMode
+                    ? "h-11 gap-2 rounded-full bg-gradient-to-r from-violet-500 to-purple-500 px-4 text-sm font-bold text-white shadow-md"
+                    : "h-11 gap-2 rounded-full border-rose-200 bg-white/80 px-4 text-sm font-bold text-stone-700 hover:bg-rose-50 hover:text-rose-600"
+                }
+              >
+                <CheckSquare className="h-4 w-4" />
+                {selectMode ? "Done" : "Select"}
+              </Button>
+            )}
+            <Button
+              onClick={fetchBooks}
+              variant="outline"
+              className="h-11 shrink-0 gap-2 rounded-full border-rose-200 bg-white/80 px-5 text-sm font-bold text-stone-700 hover:bg-rose-50 hover:text-rose-600"
+            >
+              <RefreshCw className={loading ? "h-4 w-4 animate-spin" : "h-4 w-4"} />
+              Refresh
+            </Button>
+          </div>
         </div>
       </div>
 
@@ -193,6 +305,20 @@ export function ColoringBookGenerator() {
           viewMode={viewMode}
           onViewMode={setViewMode}
           resultCount={filtered.length}
+          sortBy={sortBy}
+          onSortBy={setSortBy}
+        />
+      )}
+
+      {/* Batch selection toolbar */}
+      {selectMode && !loading && !error && books.length > 0 && (
+        <BatchToolbar
+          selectedCount={selectedSlugs.size}
+          totalCount={filtered.length}
+          onSelectAll={selectAll}
+          onClear={clearSelection}
+          onDownload={handleBatchDownload}
+          downloading={batchDownloading}
         />
       )}
 
@@ -214,6 +340,9 @@ export function ColoringBookGenerator() {
               index={idx}
               onDownload={() => handleDownload(book)}
               onPreview={() => handlePreview(book)}
+              selectMode={selectMode}
+              selected={selectedSlugs.has(book.slug)}
+              onToggleSelect={() => toggleSelect(book.slug)}
             />
           ))}
         </div>
@@ -226,6 +355,9 @@ export function ColoringBookGenerator() {
               index={idx}
               onDownload={() => handleDownload(book)}
               onPreview={() => handlePreview(book)}
+              selectMode={selectMode}
+              selected={selectedSlugs.has(book.slug)}
+              onToggleSelect={() => toggleSelect(book.slug)}
             />
           ))}
         </div>
@@ -258,6 +390,8 @@ function SearchBar({
   viewMode,
   onViewMode,
   resultCount,
+  sortBy,
+  onSortBy,
 }: {
   search: string;
   onSearch: (v: string) => void;
@@ -267,6 +401,8 @@ function SearchBar({
   viewMode: "grid" | "list";
   onViewMode: (m: "grid" | "list") => void;
   resultCount: number;
+  sortBy: "date-desc" | "date-asc" | "name" | "pages" | "size";
+  onSortBy: (s: "date-desc" | "date-asc" | "name" | "pages" | "size") => void;
 }) {
   return (
     <div className="rounded-2xl border border-stone-200 bg-white/80 p-3 shadow-sm backdrop-blur">
@@ -292,11 +428,26 @@ function SearchBar({
           )}
         </div>
 
-        {/* Result count + view toggle */}
+        {/* Result count + sort + view toggle */}
         <div className="flex items-center gap-2">
           <span className="hidden whitespace-nowrap text-xs font-bold text-stone-500 sm:inline">
             {resultCount} {resultCount === 1 ? "book" : "books"}
           </span>
+          {/* Sort dropdown */}
+          <Select value={sortBy} onValueChange={(v) => onSortBy(v as typeof sortBy)}>
+            <SelectTrigger className="h-9 w-auto gap-1.5 rounded-full border-stone-200 bg-stone-50 px-3 text-xs font-bold text-stone-600 hover:bg-stone-100">
+              <ArrowDownUp className="h-3.5 w-3.5 text-stone-400" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent className="rounded-xl">
+              <SelectItem value="date-desc" className="text-xs font-semibold">Newest first</SelectItem>
+              <SelectItem value="date-asc" className="text-xs font-semibold">Oldest first</SelectItem>
+              <SelectItem value="name" className="text-xs font-semibold">Name (A-Z)</SelectItem>
+              <SelectItem value="pages" className="text-xs font-semibold">Most pages</SelectItem>
+              <SelectItem value="size" className="text-xs font-semibold">Largest size</SelectItem>
+            </SelectContent>
+          </Select>
+          {/* View toggle */}
           <div className="flex items-center gap-0.5 rounded-full border border-stone-200 bg-stone-50 p-0.5">
             <button
               onClick={() => onViewMode("grid")}
@@ -364,19 +515,43 @@ function BookRow({
   index,
   onDownload,
   onPreview,
+  selectMode,
+  selected,
+  onToggleSelect,
 }: {
   book: BookMeta;
   index: number;
   onDownload: () => void;
   onPreview: () => void;
+  selectMode: boolean;
+  selected: boolean;
+  onToggleSelect: () => void;
 }) {
   const theme = getCategoryTheme(book.category);
   const thumb = `/downloads/thumbnails/${book.slug}/page-1.png`;
 
   return (
     <div
-      className={`group flex items-center gap-4 rounded-2xl border border-stone-200 bg-white p-3 shadow-sm transition-all hover:border-stone-300 hover:shadow-md animate-fade-in-up stagger-${(index % 6) + 1}`}
+      className={`group flex items-center gap-4 rounded-2xl border bg-white p-3 shadow-sm transition-all hover:shadow-md animate-fade-in-up stagger-${(index % 6) + 1} ${
+        selected
+          ? "border-violet-400 ring-2 ring-violet-200"
+          : "border-stone-200 hover:border-stone-300"
+      }`}
     >
+      {/* Checkbox (select mode) */}
+      {selectMode && (
+        <button
+          onClick={onToggleSelect}
+          className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-full border-2 transition-all ${
+            selected
+              ? "border-violet-500 bg-violet-500 text-white"
+              : "border-stone-300 bg-white text-transparent hover:border-violet-400"
+          }`}
+          aria-label={selected ? "Deselect" : "Select"}
+        >
+          {selected && <CheckCircle2 className="h-4 w-4" />}
+        </button>
+      )}
       {/* thumbnail */}
       <div className="relative flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-stone-100 bg-gradient-to-br from-stone-50 to-stone-100">
         <div className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${theme.gradient}`} />
@@ -469,6 +644,78 @@ function NoResults({
   );
 }
 
+function BatchToolbar({
+  selectedCount,
+  totalCount,
+  onSelectAll,
+  onClear,
+  onDownload,
+  downloading,
+}: {
+  selectedCount: number;
+  totalCount: number;
+  onSelectAll: () => void;
+  onClear: () => void;
+  onDownload: () => void;
+  downloading: boolean;
+}) {
+  const allSelected = selectedCount === totalCount && totalCount > 0;
+  return (
+    <div className="sticky top-16 z-30 flex flex-wrap items-center justify-between gap-3 rounded-2xl border-2 border-violet-300 bg-violet-50/95 p-3 shadow-lg shadow-violet-100 backdrop-blur-md animate-fade-in-up">
+      <div className="flex items-center gap-3">
+        <div className="flex h-9 w-9 items-center justify-center rounded-full bg-violet-500 text-white shadow-sm">
+          <Package className="h-4.5 w-4.5" />
+        </div>
+        <div>
+          <div className="text-sm font-extrabold text-violet-900">
+            {selectedCount} {selectedCount === 1 ? "book" : "books"} selected
+          </div>
+          <div className="text-[11px] font-semibold text-violet-600">
+            of {totalCount} {totalCount === 1 ? "book" : "books"} shown
+          </div>
+        </div>
+      </div>
+      <div className="flex flex-wrap items-center gap-2">
+        <Button
+          onClick={allSelected ? onClear : onSelectAll}
+          variant="outline"
+          size="sm"
+          className="h-9 gap-1.5 rounded-full border-violet-300 bg-white px-3 text-xs font-bold text-violet-700 hover:bg-violet-100"
+        >
+          <CheckSquare className="h-3.5 w-3.5" />
+          {allSelected ? "Deselect all" : "Select all"}
+        </Button>
+        <Button
+          onClick={onClear}
+          variant="ghost"
+          size="sm"
+          className="h-9 gap-1.5 rounded-full px-3 text-xs font-bold text-violet-600 hover:bg-violet-100"
+        >
+          <X className="h-3.5 w-3.5" />
+          Clear
+        </Button>
+        <Button
+          onClick={onDownload}
+          disabled={selectedCount === 0 || downloading}
+          className="h-9 gap-2 rounded-full bg-gradient-to-r from-violet-500 to-purple-500 px-5 text-xs font-bold text-white shadow-md shadow-violet-200 transition-all hover:from-violet-600 hover:to-purple-600 disabled:opacity-50"
+        >
+          {downloading ? (
+            <>
+              <RefreshCw className="h-4 w-4 animate-spin" />
+              Zipping…
+            </>
+          ) : (
+            <>
+              <Download className="h-4 w-4" />
+              Download {selectedCount > 0 ? selectedCount : ""} as ZIP
+            </>
+          )}
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 function StatCard({
   icon,
   label,
@@ -502,11 +749,17 @@ function BookCard({
   index,
   onDownload,
   onPreview,
+  selectMode,
+  selected,
+  onToggleSelect,
 }: {
   book: BookMeta;
   index: number;
   onDownload: () => void;
   onPreview: () => void;
+  selectMode: boolean;
+  selected: boolean;
+  onToggleSelect: () => void;
 }) {
   const theme = getCategoryTheme(book.category);
 
@@ -515,8 +768,26 @@ function BookCard({
 
   return (
     <Card
-      className={`group relative flex h-full flex-col overflow-hidden rounded-2xl border-stone-200 bg-white shadow-sm transition-all duration-300 hover:-translate-y-1 hover:shadow-xl hover:shadow-rose-100/60 animate-fade-in-up stagger-${(index % 6) + 1}`}
+      className={`group relative flex h-full flex-col overflow-hidden rounded-2xl bg-white shadow-sm transition-all duration-300 animate-fade-in-up stagger-${(index % 6) + 1} ${
+        selected
+          ? "border-2 border-violet-400 ring-2 ring-violet-200 -translate-y-1 shadow-xl"
+          : "border border-stone-200 hover:-translate-y-1 hover:shadow-xl hover:shadow-rose-100/60"
+      }`}
     >
+      {/* Selection checkbox overlay (top-right, select mode only) */}
+      {selectMode && (
+        <button
+          onClick={onToggleSelect}
+          className={`absolute right-2 top-2 z-20 flex h-8 w-8 items-center justify-center rounded-full border-2 shadow-md transition-all ${
+            selected
+              ? "border-violet-500 bg-violet-500 text-white"
+              : "border-white bg-white/80 text-transparent backdrop-blur hover:border-violet-400"
+          }`}
+          aria-label={selected ? "Deselect" : "Select"}
+        >
+          {selected && <CheckCircle2 className="h-5 w-5" />}
+        </button>
+      )}
       {/* Top accent bar with gradient */}
       <div className={`h-1.5 w-full bg-gradient-to-r ${theme.gradient}`} />
 
