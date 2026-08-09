@@ -658,3 +658,30 @@ Stage Summary:
 - GitHub repo updated with Turso fix
 - Ready for next step: Vercel Blob token → migrate Pets book
 - Turso credentials configured locally in .env and .env.local
+
+---
+Task ID: production-migration-complete
+Agent: Z.ai Code (production deployment)
+Task: Migrate Pets book to Turso + Vercel Blob, verify production data flow.
+
+Work Log:
+- User provided Vercel Blob token (public store)
+- Updated .env.local and .env with new BLOB_READ_WRITE_TOKEN
+- Ran scripts/migrate-to-turso.ts:
+  - Uploaded Pets PDF (4.2 MB) to Vercel Blob → https://21om0xlusaw17nby.public.blob.vercel-storage.com/pdfs/Pets-Coloring-Book.pdf
+  - Uploaded 30 thumbnails to Vercel Blob → https://21om0xlusaw17nby.public.blob.vercel-storage.com/thumbnails/Pets/page-N.png
+  - Created Turso record for Pets book with Blob URLs + 30 items array
+- Verified /api/books returns source: "turso" with 1 book (Pets, 30 pages, 4.2 MB)
+- Verified PDF URL accessible (HTTP 200, 4.2 MB)
+- Verified thumbnail URL accessible (HTTP 200, 15 KB)
+- Verified app renders Pets book with visible Blob thumbnail
+- Pushed to GitHub
+
+Stage Summary:
+- **PRODUCTION MIGRATION COMPLETE** ✓
+- Turso: 1 book record (Pets, 30 pages, 30 items)
+- Vercel Blob: 1 PDF + 30 thumbnails (public, CDN-accessible)
+- /api/books reads from Turso (source: "turso")
+- App verified working with production data
+- GitHub repo updated: https://github.com/shinil-120/coloring-book-pdf-generator
+- Ready for Vercel deployment verification
