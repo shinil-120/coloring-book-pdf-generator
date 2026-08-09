@@ -512,9 +512,9 @@ export const NATURAL_PALETTES: Record<string, Palette> = {
   // ---- Vehicles (no natural color — handled by fallback) ----
 
   // ---- Pets & Domestic Animals ----
-  Dog: [[180, 130, 80], [140, 100, 60], [230, 200, 160]],       // tan body + dark ear + light belly
-  Cat: [[230, 140, 60], [200, 110, 40], [250, 230, 200]],        // orange tabby + dark stripes + light belly
-  Hamster: [[220, 170, 100], [180, 130, 70], [250, 230, 200]],   // golden body + dark + light belly
+  Dog: [[180, 130, 80], [140, 100, 60], [210, 175, 130]],       // tan body + dark ear + light tan belly (not white)
+  Cat: [[230, 140, 60], [200, 110, 40], [220, 180, 130]],        // orange tabby + dark stripes + light tan belly (not white)
+  Hamster: [[220, 170, 100], [180, 130, 70], [225, 195, 150]],   // golden body + dark + light tan belly (not white)
   Rabbit: [[215, 215, 220], [180, 180, 185], [255, 195, 205]],   // light grey fur (NOT white) + darker grey shadow + pink inner ear
   Parrot: [[220, 60, 60], [80, 140, 220], [255, 200, 50]],       // red body + blue wing + yellow tail
   Goldfish: [[255, 140, 30], [255, 200, 50], [80, 130, 180]],    // orange body + yellow fin + blue water

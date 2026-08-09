@@ -30,6 +30,7 @@ export async function uploadFile(
     const blob = await put(key, buffer, {
       access: "public",
       addRandomSuffix: false,
+      allowOverwrite: true,
     });
     return { url: blob.url, isLocal: false };
   }

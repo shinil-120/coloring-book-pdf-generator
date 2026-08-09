@@ -135,12 +135,11 @@ export async function colorizeImage(
   options: { whiteThreshold?: number; minSize?: number; maxSize?: number; closeGaps?: number } = {}
 ): Promise<void> {
   const whiteThreshold = options.whiteThreshold ?? 200;
-  const minSize = options.minSize ?? 10; // ignore tiny noise regions
+  const minSize = options.minSize ?? 1; // color even tiny enclosed regions (no whites left)
   const maxSize = options.maxSize ?? 1000000;
-  const closeGaps = options.closeGaps ?? 14; // aggressive gap-closing to seal AI line art gaps
+  const closeGaps = options.closeGaps ?? 4; // lighter gap-closing — less gap between color and outline
 
-  // Resize to 1000×1000 then place on a 1024×1024 WHITE canvas. The 12px
-  // white border guarantees no subject region can touch the canvas edge.
+  // Resize to 1000×1000 then place on a 1024×1024 WHITE canvas.
   const resized = await sharp(bwPath)
     .resize(1000, 1000, { fit: "cover" })
     .flatten({ background: { r: 255, g: 255, b: 255 } })
@@ -165,7 +164,8 @@ export async function colorizeImage(
   const ch = canvasInfo.channels;
   const total = w * h;
 
-  // Build single-channel luminance buffer (original — kept for final output)
+  // Build single-channel luminance buffer (original — used for final output
+  // AND for the expansion step that fills color up to the real outline)
   const lum = new Uint8Array(total);
   for (let i = 0; i < total; i++) {
     if (ch >= 3) {
@@ -175,11 +175,16 @@ export async function colorizeImage(
     }
   }
 
-  // ── GAP-CLOSING: dilate black lines to seal gaps in AI line art ──────
-  const fillMask = new Uint8Array(total); // 1 = black (barrier), 0 = white
+  // ── ORIGINAL mask: 1 = black line (real outline), 0 = white ────────
+  // Used for the EXPANSION step — color fills right up to the real lines.
+  const origMask = new Uint8Array(total);
   for (let i = 0; i < total; i++) {
-    fillMask[i] = lum[i] <= whiteThreshold ? 1 : 0;
+    origMask[i] = lum[i] <= whiteThreshold ? 1 : 0;
   }
+
+  // ── GAP-CLOSED mask: dilated black lines for flood-fill boundaries ──
+  // Used only to correctly identify enclosed regions (seals AI line art gaps).
+  const fillMask = new Uint8Array(origMask);
   for (let pass = 0; pass < closeGaps; pass++) {
     const dilated = new Uint8Array(fillMask);
     for (let y = 1; y < h - 1; y++) {
@@ -198,11 +203,7 @@ export async function colorizeImage(
     for (let i = 0; i < total; i++) fillMask[i] = dilated[i];
   }
 
-  // ── STEP 1: Find enclosed sub-regions (closed-line areas) ───────────
-  // These are areas fully enclosed by black lines — e.g. a nose drawn as
-  // a closed circle, an eye, an ear pattern. They do NOT touch the image
-  // border. We flood-fill from every unvisited white pixel and keep only
-  // regions that don't reach the border.
+  // ── STEP 1: Find enclosed sub-regions using gap-closed mask ─────────
   interface Region {
     pixels: number[];
     size: number;
@@ -252,18 +253,13 @@ export async function colorizeImage(
       }
     }
 
-    // Keep only NON-border-touching regions (truly enclosed by closed lines)
-    // and above minSize to avoid noise
+    // Keep enclosed regions (non-border-touching), minSize=1 (no whites left)
     if (!touchesBorder && pixelIndices.length >= minSize && pixelIndices.length < maxSize) {
       subRegions.push({ pixels: pixelIndices, size: pixelIndices.length });
     }
   }
 
   // ── STEP 2: Center-fill to find the BODY region ─────────────────────
-  // The body = everything reachable from the center of the subject,
-  // stopping at black lines. This naturally EXCLUDES enclosed sub-regions
-  // (like a nose) because the black outline stops the fill.
-  // This is the "larger region" that gets the natural main color.
   let bboxMinX = w, bboxMinY = h, bboxMaxX = 0, bboxMaxY = 0;
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
@@ -279,10 +275,8 @@ export async function colorizeImage(
   const cy = Math.floor((bboxMinY + bboxMaxY) / 2);
 
   const bodyRegion: Region | null = (() => {
-    // If center is on a black pixel, search nearby for a white pixel
     let startIdx = cy * w + cx;
     if (fillMask[startIdx] === 1) {
-      // Spiral search for nearest white pixel
       let found = -1;
       for (let r = 1; r < 50 && found === -1; r++) {
         for (let dy = -r; dy <= r && found === -1; dy++) {
@@ -335,21 +329,78 @@ export async function colorizeImage(
     return null;
   })();
 
-  // ── STEP 3: Combine regions — body (largest) + enclosed sub-regions ─
-  // The body region gets palette[0] (natural main color).
-  // Enclosed sub-regions (nose, eyes, etc.) get palette[1], [2], etc.
-  // sorted by size (largest sub-region first).
-  // NO forced minimum — if there are no enclosed sub-regions, only the
-  // body is colored.
+  // ── STEP 3: Combine regions ─────────────────────────────────────────
   const regions: Region[] = [];
   if (bodyRegion) {
     regions.push(bodyRegion);
   }
-  // Sort sub-regions largest first, then append
   subRegions.sort((a, b) => b.size - a.size);
   regions.push(...subRegions);
 
-  // ── Build output: black lines stay, white background stays, regions colored
+  // ── STEP 4: Build output with EXPANSION to fill up to real outline ───
+  // First, create a color map: each pixel → which region index it belongs to
+  // (255 = uncolored/background)
+  const colorMap = new Uint8Array(total);
+  colorMap.fill(255);
+  regions.forEach((region, i) => {
+    for (const idx of region.pixels) {
+      colorMap[idx] = i;
+    }
+  });
+
+  // Now EXPAND each region outward against the ORIGINAL mask (origMask).
+  // This fills the gap between the flood-fill boundary (gap-closed) and the
+  // real outline, ensuring color reaches right up to the black lines.
+  // Keep expanding until no more changes (unlimited passes).
+  let expanding = true;
+  let safetyCounter = 0;
+  while (expanding && safetyCounter < 30) {
+    const next = new Uint8Array(colorMap);
+    expanding = false;
+    for (let y = 1; y < h - 1; y++) {
+      for (let x = 1; x < w - 1; x++) {
+        const idx = y * w + x;
+        if (origMask[idx] === 1 || colorMap[idx] !== 255) continue;
+        let bestRegion = 255;
+        for (let dy = -1; dy <= 1 && bestRegion === 255; dy++) {
+          const ny = y + dy;
+          for (let dx = -1; dx <= 1 && bestRegion === 255; dx++) {
+            if (dx === 0 && dy === 0) continue;
+            const nidx = ny * w + (x + dx);
+            if (colorMap[nidx] !== 255) {
+              bestRegion = colorMap[nidx];
+            }
+          }
+        }
+        if (bestRegion !== 255) {
+          next[idx] = bestRegion;
+          expanding = true;
+        }
+      }
+    }
+    for (let i = 0; i < total; i++) {
+      colorMap[i] = next[i];
+    }
+    safetyCounter++;
+  }
+
+  // ── STEP 5: Fill remaining whites inside the subject ────────────────
+  // After expansion, there may still be uncolored white pixels inside the
+  // subject (e.g. a leg outlined separately that the center-fill didn't
+  // reach). Fill any uncolored white pixel INSIDE the bounding box with
+  // the body color (palette[0] = region 0).
+  if (bodyRegion) {
+    for (let y = bboxMinY; y <= bboxMaxY; y++) {
+      for (let x = bboxMinX; x <= bboxMaxX; x++) {
+        const idx = y * w + x;
+        if (colorMap[idx] === 255 && origMask[idx] === 0) {
+          colorMap[idx] = 0; // body color
+        }
+      }
+    }
+  }
+
+  // ── Build final output RGB buffer ───────────────────────────────────
   const outRgb = Buffer.alloc(total * 3);
   for (let i = 0; i < total; i++) {
     const v = lum[i];
@@ -358,16 +409,16 @@ export async function colorizeImage(
     outRgb[i * 3 + 2] = v;
   }
 
-  // Color: body (regions[0]) → palette[0] (main natural color),
-  // sub-regions → palette[1], palette[2], etc.
-  regions.forEach((region, i) => {
-    const color: RGB = palette[i % palette.length];
-    for (const idx of region.pixels) {
-      outRgb[idx * 3] = color[0];
-      outRgb[idx * 3 + 1] = color[1];
-      outRgb[idx * 3 + 2] = color[2];
+  // Apply colors from the expanded colorMap
+  for (let i = 0; i < total; i++) {
+    const regionIdx = colorMap[i];
+    if (regionIdx !== 255) {
+      const color: RGB = palette[regionIdx % palette.length];
+      outRgb[i * 3] = color[0];
+      outRgb[i * 3 + 1] = color[1];
+      outRgb[i * 3 + 2] = color[2];
     }
-  });
+  }
 
   await sharp(outRgb, { raw: { width: w, height: h, channels: 3 } })
     .png()
