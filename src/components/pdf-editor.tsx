@@ -34,6 +34,7 @@ import {
   ChevronRight,
   X,
   CheckCircle2,
+  Palette,
   Download,
   RefreshCw,
   AlertCircle,
@@ -442,13 +443,25 @@ export function PdfEditor() {
         </div>
       ) : (
         <>
-          {/* Hint */}
-          <div className="flex items-center gap-2 rounded-xl border border-violet-100 bg-violet-50/60 px-4 py-2.5 text-xs font-medium text-violet-700">
-            <Wand2 className="h-3.5 w-3.5 shrink-0" />
-            <span>
-              Drag the <GripVertical className="inline h-3 w-3" /> handle on any
-              page to rearrange. Pink badges = content, grey = blank.
-            </span>
+          {/* Hint + KDP specs row */}
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-2 rounded-xl border border-violet-100 bg-violet-50/60 px-4 py-2.5 text-xs font-medium text-violet-700">
+              <Wand2 className="h-3.5 w-3.5 shrink-0" />
+              <span>
+                Drag the <GripVertical className="inline h-3 w-3" /> handle on any
+                page to rearrange. Pink badges = content, grey = blank.
+              </span>
+            </div>
+            {/* KDP specs mini-panel */}
+            <div className="flex shrink-0 items-center gap-2 rounded-xl border border-amber-200 bg-amber-50/70 px-3 py-2 text-[11px] font-bold text-amber-800">
+              <Palette className="h-3.5 w-3.5 text-amber-600" />
+              <span className="hidden sm:inline">KDP Specs:</span>
+              <span>8.5×11 in</span>
+              <span className="text-amber-300">·</span>
+              <span>0.5″ margins</span>
+              <span className="text-amber-300">·</span>
+              <span>{counts.total}p</span>
+            </div>
           </div>
 
           {/* Grid */}
@@ -492,36 +505,78 @@ export function PdfEditor() {
 
           {/* Summary bar */}
           <div className="sticky bottom-4 z-30">
-            <div className="flex flex-col gap-3 rounded-2xl border border-pink-200 bg-white/95 p-4 shadow-lg shadow-pink-100/50 backdrop-blur-md sm:flex-row sm:items-center sm:justify-between">
-              <div className="flex flex-wrap items-center gap-2">
-                <Badge className="rounded-full bg-pink-100 px-3 py-1.5 text-xs font-bold text-pink-700">
-                  <Files className="mr-1 h-3 w-3" />
-                  {counts.total} pages selected
-                </Badge>
-                {counts.blank > 0 && (
-                  <Badge className="rounded-full bg-stone-100 px-3 py-1.5 text-xs font-bold text-stone-600">
-                    {counts.blank} blank + {counts.content} content
+            <div className="flex flex-col gap-3 rounded-2xl border border-pink-200 bg-white/95 p-4 shadow-lg shadow-pink-100/50 backdrop-blur-md">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge className="rounded-full bg-pink-100 px-3 py-1.5 text-xs font-bold text-pink-700">
+                    <Files className="mr-1 h-3 w-3" />
+                    {counts.total} pages selected
                   </Badge>
-                )}
+                  {counts.blank > 0 ? (
+                    <Badge className="rounded-full bg-stone-100 px-3 py-1.5 text-xs font-bold text-stone-600">
+                      {counts.blank} blank + {counts.content} content
+                    </Badge>
+                  ) : (
+                    <Badge className="rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-bold text-emerald-700 border border-emerald-200">
+                      <CheckCircle2 className="mr-1 h-3 w-3" />
+                      All content
+                    </Badge>
+                  )}
+                  {/* KDP compliance badge */}
+                  <Badge className="rounded-full bg-amber-50 px-3 py-1.5 text-xs font-bold text-amber-700 border border-amber-200" title="8.5 × 11 inches, 0.5 inch margins">
+                    <Palette className="mr-1 h-3 w-3" />
+                    KDP Ready
+                  </Badge>
+                </div>
+
+                <Button
+                  onClick={assemblePdf}
+                  disabled={assembling || pages.length === 0}
+                  className="h-11 gap-2 rounded-full bg-gradient-to-r from-pink-500 to-rose-500 px-6 text-sm font-bold text-white shadow-md shadow-pink-200 transition-all hover:from-pink-600 hover:to-rose-600 hover:shadow-lg hover:shadow-pink-300 disabled:opacity-60"
+                >
+                  {assembling ? (
+                    <>
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      Assembling…
+                    </>
+                  ) : (
+                    <>
+                      <FileText className="h-4 w-4" />
+                      Create Edited PDF
+                    </>
+                  )}
+                </Button>
               </div>
 
-              <Button
-                onClick={assemblePdf}
-                disabled={assembling || pages.length === 0}
-                className="h-11 gap-2 rounded-full bg-gradient-to-r from-pink-500 to-rose-500 px-6 text-sm font-bold text-white shadow-md shadow-pink-200 transition-all hover:from-pink-600 hover:to-rose-600 hover:shadow-lg hover:shadow-pink-300 disabled:opacity-60"
-              >
-                {assembling ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                    Assembling…
-                  </>
-                ) : (
-                  <>
-                    <FileText className="h-4 w-4" />
-                    Create Edited PDF
-                  </>
-                )}
-              </Button>
+              {/* Visual proportion bar — content vs blank */}
+              {counts.total > 0 && (
+                <div className="flex items-center gap-2">
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-stone-400">Layout</span>
+                  <div className="relative h-2.5 flex-1 overflow-hidden rounded-full bg-stone-100">
+                    {counts.blank > 0 && (
+                      <div
+                        className="absolute inset-y-0 left-0 bg-gradient-to-r from-pink-400 to-rose-400 transition-all duration-500"
+                        style={{ width: `${(counts.content / counts.total) * 100}%` }}
+                      />
+                    )}
+                    {counts.blank > 0 && (
+                      <div
+                        className="absolute inset-y-0 bg-stone-300 transition-all duration-500"
+                        style={{
+                          left: `${(counts.content / counts.total) * 100}%`,
+                          width: `${(counts.blank / counts.total) * 100}%`,
+                        }}
+                      />
+                    )}
+                    {counts.blank === 0 && (
+                      <div className="absolute inset-0 bg-gradient-to-r from-pink-400 to-rose-400" />
+                    )}
+                  </div>
+                  <span className="text-[10px] font-bold text-stone-500">
+                    {counts.content}c{counts.blank > 0 ? ` / ${counts.blank}b` : ""}
+                  </span>
+                </div>
+              )}
             </div>
           </div>
         </>

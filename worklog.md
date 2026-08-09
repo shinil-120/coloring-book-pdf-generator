@@ -288,3 +288,51 @@ Stage Summary:
 - All existing features preserved (search, filter, grid/list, preview modals, drag-and-drop editor)
 - Key new files: `src/app/api/batch-download/route.ts`, `BatchToolbar` component
 - Next opportunities: custom page upload, print preview, book compilation/merge, export to other formats
+
+---
+Task ID: cron-review-4
+Agent: Z.ai Code (webDevReview cron — round 4)
+Task: Assess project status, perform QA testing, add new features (KDP specs panel, visual proportion bar, editor summary enhancements).
+
+Work Log:
+- Reviewed worklog — project had 7 books, batch download, sort, preview modals, all working
+- QA tested with agent-browser + VLM: Tab 1 (7 books), Tab 2 (load Pets → 5 pages), all stable
+- VLM suggested KDP interiors export as high-value feature
+
+New features implemented this round:
+1. **KDP Specs Mini-Panel** (editor) — a compact amber-themed panel in the editor hint row showing:
+   - "KDP Specs: 8.5×11 in · 0.5″ margins · Np" (live page count)
+   - Always visible while editing, reinforces KDP compliance
+   - Palette icon + amber color theme
+
+2. **Visual Proportion Bar** (editor summary bar) — a gradient progress bar showing content vs blank page breakdown:
+   - Pink/rose gradient = content pages
+   - Grey section = blank pages
+   - Animates smoothly (transition-all duration-500) when pages change
+   - "Layout" label + "Xc / Yb" count on the right
+   - Updates live when adding/deleting/duplicating pages
+
+3. **Enhanced Summary Bar Badges**:
+   - "X pages selected" (pink)
+   - "X blank + Y content" (grey, when blanks exist) OR "All content" (green, when no blanks)
+   - "KDP Ready" badge (amber, with Palette icon) — reinforces compliance
+   - All badges have hover tooltips
+
+4. **Improved summary bar layout** — flex-col on mobile, flex-row on desktop, with the Create button and badges in a clean row
+
+QA verification:
+- KDP Specs panel: VLM confirmed "8.5×11 in · 0.5 margins · 5p" visible in editor
+- Proportion bar (no blanks): VLM confirmed fully pink bar with "All content" + "KDP Ready" badges
+- Proportion bar (with blanks): After Add Blank Pages, VLM confirmed split bar (pink content + grey blank) + "5 blank + 5 content" badge
+- Clean lint (0 errors, 0 warnings)
+- No runtime errors after clean reload
+- 14 Preview/Download buttons on Tab 1 (7 cards × 2)
+
+Stage Summary:
+- **Status: KDP COMPLIANCE UI + VISUAL BREAKDOWN ADDED**
+- Editor now shows live KDP specs panel + animated proportion bar
+- Summary bar has smart badges (All content vs blank+content, KDP Ready)
+- All features visually verified by VLM
+- VLM design rating: stable, polished
+- All existing features preserved (search, filter, sort, grid/list, batch download, preview modals, drag-and-drop, page preview)
+- Next opportunities: custom page upload, print preview, book merge/compilation, export to PNG/SVG
