@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { PDFDocument } from "pdf-lib";
 import fs from "fs";
 import path from "path";
+import { listBooks, type BookMeta } from "@/lib/turso";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -16,13 +17,16 @@ interface EditPage {
 
 /**
  * POST /api/edit-pdf
- * Body: { pdfPath: string }   e.g. "/downloads/Dinosaurs-Coloring-Book.pdf"
+ * Body: { pdfPath: string }
+ *   - Local: "/downloads/Pets-Coloring-Book.pdf"
+ *   - Blob:  "https://xxx.public.blob.vercel-storage.com/pdfs/Pets-Coloring-Book.pdf"
  *
  * Returns:
- *   { success, fileName, pageCount, pages: [...], pdfData: base64 }
+ *   { success, fileName, slug, pageCount, pages: [...], pdfData: base64 }
  *
- * Simple 1:1 mapping: page i → items[i] → thumbnail page-(i+1).png
- * No cover/blank detection — every page is one content item.
+ * Handles both local filesystem files and remote Vercel Blob URLs.
+ * Thumbnails are returned as Blob URLs (if the book is from Turso) or
+ * local paths (if from the local JSON fallback).
  */
 export async function POST(req: NextRequest) {
   try {
@@ -36,78 +40,111 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Resolve to filesystem path under the project root.
-    // pdfPath looks like "/downloads/Dinosaurs-Coloring-Book.pdf"
-    const projectRoot = process.cwd();
-    const filePath = path.join(projectRoot, "public", pdfPath.replace(/^\//, ""));
+    // ── Load the PDF (local file or remote Blob URL) ──────────────────
+    let fileBuffer: Buffer;
+    let fileName: string;
+    let slug: string;
 
-    if (!fs.existsSync(filePath)) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: `PDF not found: ${pdfPath}`,
-          resolvedPath: filePath,
-        },
-        { status: 404 }
-      );
+    if (pdfPath.startsWith("http://") || pdfPath.startsWith("https://")) {
+      // Remote URL (Vercel Blob) — fetch it
+      const res = await fetch(pdfPath);
+      if (!res.ok) {
+        return NextResponse.json(
+          { success: false, error: `Failed to fetch PDF: HTTP ${res.status}` },
+          { status: 404 }
+        );
+      }
+      fileBuffer = Buffer.from(await res.arrayBuffer());
+      // Extract slug from URL: .../pdfs/Pets-Coloring-Book.pdf → Pets
+      fileName = pdfPath.split("/").pop() ?? "book.pdf";
+      slug = fileName
+        .replace(/-Coloring-Book\.pdf$/i, "")
+        .replace(/\.pdf$/i, "");
+    } else {
+      // Local filesystem path
+      const projectRoot = process.cwd();
+      const filePath = path.join(projectRoot, "public", pdfPath.replace(/^\//, ""));
+      if (!fs.existsSync(filePath)) {
+        return NextResponse.json(
+          { success: false, error: `PDF not found: ${pdfPath}` },
+          { status: 404 }
+        );
+      }
+      fileBuffer = fs.readFileSync(filePath);
+      fileName = path.basename(filePath);
+      slug = fileName
+        .replace(/-Coloring-Book\.pdf$/i, "")
+        .replace(/\.pdf$/i, "");
     }
 
-    const fileBuffer = fs.readFileSync(filePath);
     const pdfDoc = await PDFDocument.load(fileBuffer, { ignoreEncryption: true });
     const pageCount = pdfDoc.getPageCount();
     const pages = pdfDoc.getPages();
 
-    // Derive the slug & thumbnail directory.
-    const fileName = path.basename(filePath);
-    const slug = fileName
-      .replace(/-Coloring-Book\.pdf$/i, "")
-      .replace(/\.pdf$/i, "");
-
-    // Build page list with labels + thumbnails.
-    const pageList: EditPage[] = [];
-
-    // Try to load labels from metadata JSON (best-effort).
+    // ── Load labels + thumbnail URLs from Turso (or local JSON) ────────
     let itemLabels: string[] | null = null;
+    let thumbnailBaseUrl: string | null = null; // e.g. "https://xxx.blob.vercel-storage.com/thumbnails/Pets"
+
+    // Try Turso first
     try {
-      const jsonPath = path.join(
-        projectRoot,
-        "public",
-        "downloads",
-        "coloring-books.json"
-      );
-      if (fs.existsSync(jsonPath)) {
-        const meta = JSON.parse(fs.readFileSync(jsonPath, "utf-8"));
-        const arr = Array.isArray(meta) ? meta : meta.books ?? [];
-        const book = arr.find(
-          (b: { slug?: string; url?: string }) =>
-            b.slug === slug || b.url === pdfPath
-        );
-        if (book && Array.isArray(book.items) && book.items.length > 0) {
+      const allBooks = await listBooks();
+      const book = allBooks.find((b: BookMeta) => b.slug === slug || b.url === pdfPath);
+      if (book) {
+        if (book.items && book.items.length > 0) {
           itemLabels = book.items;
+        }
+        // If the book URL is a Blob URL, thumbnails are also on Blob
+        if (book.url && book.url.startsWith("http")) {
+          // Extract the base Blob URL for thumbnails
+          // e.g. https://xxx.blob.vercel-storage.com/pdfs/Pets-Coloring-Book.pdf
+          //    → https://xxx.blob.vercel-storage.com/thumbnails/Pets
+          const blobBase = book.url.replace(/\/pdfs\/.*$/, "");
+          thumbnailBaseUrl = `${blobBase}/thumbnails/${slug}`;
         }
       }
     } catch {
-      // ignore — fall back to "Page N"
+      // ignore — fall back to local
     }
 
+    // Fallback: local JSON for labels
+    if (!itemLabels) {
+      try {
+        const projectRoot = process.cwd();
+        const jsonPath = path.join(projectRoot, "public", "downloads", "coloring-books.json");
+        if (fs.existsSync(jsonPath)) {
+          const meta = JSON.parse(fs.readFileSync(jsonPath, "utf-8"));
+          const arr = Array.isArray(meta) ? meta : meta.books ?? [];
+          const book = arr.find(
+            (b: { slug?: string; url?: string }) => b.slug === slug || b.url === pdfPath
+          );
+          if (book && Array.isArray(book.items) && book.items.length > 0) {
+            itemLabels = book.items;
+          }
+        }
+      } catch {
+        // ignore
+      }
+    }
+
+    // ── Build page list ────────────────────────────────────────────────
+    const pageList: EditPage[] = [];
     for (let i = 0; i < pageCount; i++) {
       const p = pages[i];
       const { width, height } = p.getSize();
-      const label =
-        itemLabels && itemLabels[i] ? itemLabels[i] : `Page ${i + 1}`;
-      // Thumbnail URL: /downloads/thumbnails/{slug}/page-(i+1).png (1-indexed)
-      const thumbnail = `/downloads/thumbnails/${slug}/page-${i + 1}.png`;
-      pageList.push({
-        index: i,
-        width,
-        height,
-        label,
-        thumbnail,
-      });
+      const label = itemLabels && itemLabels[i] ? itemLabels[i] : `Page ${i + 1}`;
+
+      // Thumbnail URL: Blob URL (if from Turso) or local path
+      let thumbnail: string;
+      if (thumbnailBaseUrl) {
+        thumbnail = `${thumbnailBaseUrl}/page-${i + 1}.png`;
+      } else {
+        thumbnail = `/downloads/thumbnails/${slug}/page-${i + 1}.png`;
+      }
+
+      pageList.push({ index: i, width, height, label, thumbnail });
     }
 
-    // Return the source PDF as base64 so the client can send it back to
-    // /api/assemble-pdf without re-fetching it.
+    // Return the source PDF as base64
     const pdfData = fileBuffer.toString("base64");
 
     return NextResponse.json({
