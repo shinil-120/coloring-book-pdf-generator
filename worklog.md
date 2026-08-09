@@ -715,3 +715,39 @@ Stage Summary:
 - Preview modal works on production ✓
 - Editor (rearrange, add blank, copy, delete) works on production ✓
 - Production URL: https://coloring-book-pdf-generator.vercel.app
+
+---
+Task ID: final-production-fixes
+Agent: Z.ai Code (production bug fix)
+Task: Fix box border in colorized images + fix assemble-pdf 413 error on Vercel.
+
+Work Log:
+- User reported: (1) preview showing old version with square box border, (2) cannot create edited PDF
+- Root cause 1: STEP 5 in colorization filled ALL whites inside bounding box (including background between subject and bbox edges) → rectangular box
+- Fix 1: Replaced bbox-fill with border-flood-fill:
+  - Flood-fill from image border inward to mark all background-connected whites
+  - Only fill whites NOT connected to background (truly inside the subject)
+  - Verified: color follows outline, no rectangular box
+
+- Root cause 2: Vercel body size limit is 4.5MB, but base64 PDF is 4.9MB → HTTP 413
+- Fix 2: Changed assemble-pdf to accept slug instead of pdfData:
+  - Server fetches PDF directly from Vercel Blob using slug
+  - No need to send 5MB base64 over HTTP
+  - Frontend sends { slug, pageOrder } instead of { pdfData, pageOrder }
+  - Backward compat: still accepts pdfData if slug not provided
+
+- Added vercel.json with maxDuration: 60 + memory: 1024 for all API routes
+- Re-migrated updated PDF + 30 thumbnails to Vercel Blob + Turso
+
+Production verification (https://coloring-book-pdf-generator.vercel.app):
+- Tab 1: Pets book visible, thumbnail shows dog with NO box border ✓
+- Tab 2: 30 page cards load, Add Blank Pages → 60 cards, Create Edited PDF → "Edited PDF Ready!" ✓
+- Assemble API: HTTP 200, 5 pages (4 content + 1 blank) ✓
+- All buttons visible: Copy, Delete, Add Blank Pages, Reset, Create Edited PDF ✓
+- Download/Edit Again/New PDF buttons on success screen ✓
+
+Stage Summary:
+- **Both issues fixed** ✓
+- No rectangular box in colorized images (border-flood-fill replaces bbox-fill)
+- Assemble-pdf works on Vercel (slug-based, no body size limit)
+- All production APIs verified working
