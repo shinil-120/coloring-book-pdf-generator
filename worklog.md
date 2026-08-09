@@ -438,3 +438,39 @@ Stage Summary:
 - All existing features preserved (search, filter, sort, grid/list, batch download, preview modals, drag-and-drop editor, merge books, KDP specs panel)
 - Key new files: `src/components/cover-generator.tsx`, `src/app/api/generate-cover/route.ts`
 - Next opportunities: custom page upload, print preview, export to PNG/SVG, book templates, AI cover art
+
+---
+Task ID: no-box-multi-region
+Agent: Z.ai Code (user-requested colorization fix)
+Task: Remove outer box around colored images; ensure at least 3 colorizable regions per object with proper natural color application.
+
+Work Log:
+- User reported: colored reference images have an outer square box (rectangular colored area around the subject)
+- Root cause: the bbox-interior extraction approach colored ALL white pixels inside the bounding box of black pixels, including background areas between the subject outline and bbox edges — creating a rectangular "box" of color
+- User also requested: at least 3 regions per object with different colors; main region = natural color, other regions = natural or matching colors
+
+Changes to colorizeImage in scripts/image-pipeline.ts:
+1. **Removed bbox-interior extraction entirely** — no more rectangular box. Only truly enclosed (non-border-touching) white regions get colored, so color follows the subject's outline shape.
+2. **Added center-fill fallback** — if no enclosed body region is found (due to gaps in AI line art), flood-fill FROM the center of the black-pixel bbox outward, stopping at black lines. This recovers the body region WITHOUT the box (only pixels reachable from center through white paths get colored).
+3. **Increased gap-closing to 14 passes** (was 12) — more aggressive dilation to seal outline gaps before flood-fill.
+4. **Ensure at least 3 colorizable regions** — if fewer than 3 regions found, progressively scan for smaller enclosed areas (minSize=1) to find additional regions like eyes, ears, paws, etc.
+5. **Natural color application preserved** — largest region → palette[0] (main body color), second → palette[1], third → palette[2], etc. Palette cycles for objects with many regions.
+
+Regenerated all 7 books:
+- Deleted all *-color.png files
+- Re-ran demo-sample.ts for 6 placeholder books (Dinosaurs, Dragons, Ocean, Vehicles, Flowers, Insects)
+- Re-ran regenerate-pdfs-no-covers.ts for Pets (AI-generated)
+
+VLM verification:
+- Dog: color follows outline (no box), 3+ colors (tan body, cream ear, dark patch) ✓
+- Rabbit: color follows outline (no box), 3+ colors (grey body, pink ears, black eyes) ✓
+- T-Rex: no box, 4 colors (green, dark green, light green, black) ✓
+- Clean lint, 7 books, app healthy
+
+Stage Summary:
+- **Outer box REMOVED** — color now follows the subject's outline shape
+- **Multi-region coloring working** — 3+ colors per object with natural palettes
+- Center-fill fallback handles leaky outlines without creating a box
+- Aggressive gap-closing (14 passes) + enclosed-region-only coloring
+- All 7 books regenerated with improved colorization
+- Pets PDF grew from 477KB to 577KB (more colored pixels from better region detection)

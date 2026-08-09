@@ -135,14 +135,11 @@ export async function colorizeImage(
   options: { whiteThreshold?: number; minSize?: number; maxSize?: number; closeGaps?: number } = {}
 ): Promise<void> {
   const whiteThreshold = options.whiteThreshold ?? 200;
-  const minSize = options.minSize ?? 3;
-  const maxSize = options.maxSize ?? 1000000; // allow large bodies (up to ~1M px in a 1024² image)
-  const closeGaps = options.closeGaps ?? 12; // dilate black lines N times to seal gaps in AI line art
+  const maxSize = options.maxSize ?? 1000000;
+  const closeGaps = options.closeGaps ?? 14; // aggressive gap-closing to seal AI line art gaps
 
   // Resize to 1000×1000 then place on a 1024×1024 WHITE canvas. The 12px
-  // white border guarantees no subject region can touch the canvas edge,
-  // so body regions that extend to the artwork boundary stay enclosed and
-  // get colored (instead of leaking into the border-touching background).
+  // white border guarantees no subject region can touch the canvas edge.
   const resized = await sharp(bwPath)
     .resize(1000, 1000, { fit: "cover" })
     .flatten({ background: { r: 255, g: 255, b: 255 } })
@@ -177,13 +174,8 @@ export async function colorizeImage(
     }
   }
 
-  // ── GAP-CLOSING for flood-fill ──────────────────────────────────────
-  // AI line art often has tiny gaps where strokes don't fully meet, causing
-  // the body region to "leak" into the background (which then touches the
-  // border and gets skipped → uncolored). We dilate the black lines a few
-  // times to seal small gaps BEFORE flood-fill. The original lines are kept
-  // for the final compositing, so the visible outline stays crisp.
-  const fillMask = new Uint8Array(total); // 1 = black (barrier), 0 = white (fillable)
+  // ── GAP-CLOSING: dilate black lines to seal gaps in AI line art ──────
+  const fillMask = new Uint8Array(total); // 1 = black (barrier), 0 = white
   for (let i = 0; i < total; i++) {
     fillMask[i] = lum[i] <= whiteThreshold ? 1 : 0;
   }
@@ -192,8 +184,7 @@ export async function colorizeImage(
     for (let y = 1; y < h - 1; y++) {
       for (let x = 1; x < w - 1; x++) {
         const idx = y * w + x;
-        if (fillMask[idx]) continue; // already black
-        // If any 8-neighbor is black, turn this pixel black (dilate)
+        if (fillMask[idx]) continue;
         if (
           fillMask[(y - 1) * w + x - 1] || fillMask[(y - 1) * w + x] || fillMask[(y - 1) * w + x + 1] ||
           fillMask[y * w + x - 1] || fillMask[y * w + x + 1] ||
@@ -203,56 +194,24 @@ export async function colorizeImage(
         }
       }
     }
-    dilated.set(fillMask);
     for (let i = 0; i < total; i++) fillMask[i] = dilated[i];
   }
 
+  // ── Find ALL enclosed regions (non-border-touching only) ────────────
+  // NO bbox-interior extraction — this avoids the rectangular "box" of
+  // color around the subject. Only truly enclosed white regions get colored.
   const visited = new Uint8Array(total);
   interface Region {
-    pixels: number[]; // indices
+    pixels: number[];
     size: number;
-    touchesBorder: boolean;
   }
-  const regions: Region[] = [];
+  let regions: Region[] = [];
 
-  // ── Bounding box of black pixels ────────────────────────────────────
-  // AI line art often has open outlines (e.g. a ground shadow that doesn't
-  // fully enclose the body), causing the body region to merge with the
-  // background. To still color the body, we compute the bounding box of all
-  // black pixels and treat any white pixel INSIDE that bbox as "interior".
-  // We then flood-fill from the border OUTSIDE the bbox to mark the true
-  // background, leaving interior white pixels (body) to be colored.
-  let bboxMinX = w, bboxMinY = h, bboxMaxX = 0, bboxMaxY = 0;
-  for (let y = 0; y < h; y++) {
-    for (let x = 0; x < w; x++) {
-      if (fillMask[y * w + x] === 1) {
-        if (x < bboxMinX) bboxMinX = x;
-        if (x > bboxMaxX) bboxMaxX = x;
-        if (y < bboxMinY) bboxMinY = y;
-        if (y > bboxMaxY) bboxMaxY = y;
-      }
-    }
-  }
-  // Shrink bbox slightly so we don't include the outline itself
-  const bboxInset = Math.max(2, closeGaps);
-  bboxMinX = Math.max(0, bboxMinX + bboxInset);
-  bboxMinY = Math.max(0, bboxMinY + bboxInset);
-  bboxMaxX = Math.min(w - 1, bboxMaxX - bboxInset);
-  bboxMaxY = Math.min(h - 1, bboxMaxY - bboxInset);
-
-  function inBbox(x: number, y: number): boolean {
-    return x >= bboxMinX && x <= bboxMaxX && y >= bboxMinY && y <= bboxMaxY;
-  }
-
-  // Iterative BFS flood fill (8-connected) using a stack
   const stack: number[] = new Array(total);
 
   for (let start = 0; start < total; start++) {
-    // Use the gap-closed mask for barrier detection — this seals tiny gaps
-    // in AI line art so body regions stay enclosed and get colored.
     if (visited[start] || fillMask[start] === 1) continue;
 
-    // Start a new region
     let head = 0;
     let tail = 0;
     stack[tail++] = start;
@@ -273,7 +232,6 @@ export async function colorizeImage(
       const y = Math.floor(idx / w);
       const x = idx % w;
 
-      // 8-connected neighbors
       for (let dy = -1; dy <= 1; dy++) {
         const ny = y + dy;
         if (ny < 0 || ny >= h) continue;
@@ -283,7 +241,6 @@ export async function colorizeImage(
           if (nx < 0 || nx >= w) continue;
           const nidx = ny * w + nx;
           if (visited[nidx]) continue;
-          // Gap-closed mask determines barriers
           if (fillMask[nidx] === 1) continue;
           visited[nidx] = 1;
           if (nx === 0 || nx === w - 1 || ny === 0 || ny === h - 1) {
@@ -294,41 +251,141 @@ export async function colorizeImage(
       }
     }
 
-    const size = pixelIndices.length;
-
-    // A region is colorizable if:
-    //   (a) it doesn't touch the border, OR
-    //   (b) it touches the border BUT has pixels inside the black-pixel bbox
-    //       (meaning it's a body that leaked to the background through a gap).
-    // Case (b): we only color the pixels that are INSIDE the bbox, excluding
-    // the large background area outside.
-    let colorizablePixels: number[] | null = null;
-    if (!touchesBorder) {
-      if (size > minSize && size < maxSize) {
-        colorizablePixels = pixelIndices;
-      }
-    } else {
-      // Border-touching: extract only the interior (in-bbox) pixels
-      const interior = pixelIndices.filter((idx) => {
-        const px = idx % w;
-        const py = Math.floor(idx / w);
-        return inBbox(px, py);
-      });
-      if (interior.length > minSize && interior.length < maxSize) {
-        colorizablePixels = interior;
-      }
-    }
-
-    if (colorizablePixels) {
-      regions.push({ pixels: colorizablePixels, size: colorizablePixels.length, touchesBorder });
+    // Only keep NON-border-touching regions (truly enclosed areas)
+    if (!touchesBorder && pixelIndices.length > 3 && pixelIndices.length < maxSize) {
+      regions.push({ pixels: pixelIndices, size: pixelIndices.length });
     }
   }
 
   // Sort largest first
   regions.sort((a, b) => b.size - a.size);
 
-  // Build output RGB buffer (start from the clean B&W: black lines stay black,
-  // white background stays white, enclosed regions get colored)
+  // ── CENTER-FILL fallback: if no enclosed body region found ──────────
+  // If gap-closing didn't fully seal the outline, the body region leaked
+  // to the background (border-touching) and was skipped. We recover it by
+  // flood-filling FROM the center of the black-pixel bbox outward, stopping
+  // at black lines. This gives us the body region WITHOUT the rectangular
+  // box (only the area reachable from the center through white pixels).
+  if (regions.length === 0 || regions[0].size < 1000) {
+    // Find bbox of black pixels in the gap-closed mask
+    let bboxMinX = w, bboxMinY = h, bboxMaxX = 0, bboxMaxY = 0;
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        if (fillMask[y * w + x] === 1) {
+          if (x < bboxMinX) bboxMinX = x;
+          if (x > bboxMaxX) bboxMaxX = x;
+          if (y < bboxMinY) bboxMinY = y;
+          if (y > bboxMaxY) bboxMaxY = y;
+        }
+      }
+    }
+    const cx = Math.floor((bboxMinX + bboxMaxX) / 2);
+    const cy = Math.floor((bboxMinY + bboxMaxY) / 2);
+
+    // Flood-fill from center using a FRESH visited array (separate from
+    // the border-based fill above)
+    const centerVisited = new Uint8Array(total);
+    const centerStack: number[] = new Array(total);
+    let head = 0;
+    let tail = 0;
+    const centerStart = cy * w + cx;
+
+    if (fillMask[centerStart] === 0) {
+      centerStack[tail++] = centerStart;
+      centerVisited[centerStart] = 1;
+      const centerPixels: number[] = [];
+
+      while (head < tail) {
+        const idx = centerStack[head++];
+        centerPixels.push(idx);
+        const y = Math.floor(idx / w);
+        const x = idx % w;
+        for (let dy = -1; dy <= 1; dy++) {
+          const ny = y + dy;
+          if (ny < 0 || ny >= h) continue;
+          for (let dx = -1; dx <= 1; dx++) {
+            if (dx === 0 && dy === 0) continue;
+            const nx = x + dx;
+            if (nx < 0 || nx >= w) continue;
+            const nidx = ny * w + nx;
+            if (centerVisited[nidx]) continue;
+            if (fillMask[nidx] === 1) continue;
+            centerVisited[nidx] = 1;
+            centerStack[tail++] = nidx;
+          }
+        }
+      }
+
+      if (centerPixels.length > 100) {
+        // Add the center-filled body as the LARGEST region (it's the main body)
+        regions.unshift({ pixels: centerPixels, size: centerPixels.length });
+        // Re-sort
+        regions.sort((a, b) => b.size - a.size);
+      }
+    }
+  }
+
+  // ── Ensure at least 3 colorizable regions ───────────────────────────
+  // If we have fewer than 3 regions, progressively lower minSize to find
+  // smaller enclosed areas. This ensures multi-color coloring even for
+  // simple objects.
+  if (regions.length < 3) {
+    // Re-scan for smaller regions that were filtered by the >3 minSize
+    const smallRegions: Region[] = [];
+    for (let start = 0; start < total; start++) {
+      if (visited[start] || fillMask[start] === 1) continue;
+      // Check if this pixel is part of a small enclosed region
+      let head = 0;
+      let tail = 0;
+      stack[tail++] = start;
+      visited[start] = 1;
+      const pix: number[] = [];
+      let touchesB = false;
+      const sy = Math.floor(start / w);
+      const sx = start % w;
+      if (sx === 0 || sx === w - 1 || sy === 0 || sy === h - 1) touchesB = true;
+      while (head < tail) {
+        const idx = stack[head++];
+        pix.push(idx);
+        const y = Math.floor(idx / w);
+        const x = idx % w;
+        for (let dy = -1; dy <= 1; dy++) {
+          const ny = y + dy;
+          if (ny < 0 || ny >= h) continue;
+          for (let dx = -1; dx <= 1; dx++) {
+            if (dx === 0 && dy === 0) continue;
+            const nx = x + dx;
+            if (nx < 0 || nx >= w) continue;
+            const nidx = ny * w + nx;
+            if (visited[nidx]) continue;
+            if (fillMask[nidx] === 1) continue;
+            visited[nidx] = 1;
+            if (nx === 0 || nx === w - 1 || ny === 0 || ny === h - 1) touchesB = true;
+            stack[tail++] = nidx;
+          }
+        }
+      }
+      if (!touchesB && pix.length >= 1 && pix.length < maxSize) {
+        smallRegions.push({ pixels: pix, size: pix.length });
+      }
+    }
+    // Merge small regions into the main list (avoiding duplicates)
+    const existingPixelSets = new Set<number>();
+    for (const r of regions) {
+      for (const p of r.pixels) existingPixelSets.add(p);
+    }
+    for (const r of smallRegions) {
+      // Only add if not already covered
+      const hasNew = r.pixels.some((p) => !existingPixelSets.has(p));
+      if (hasNew) {
+        regions.push(r);
+        for (const p of r.pixels) existingPixelSets.add(p);
+      }
+    }
+    regions.sort((a, b) => b.size - a.size);
+  }
+
+  // ── Build output: black lines stay, white background stays, regions colored
   const outRgb = Buffer.alloc(total * 3);
   for (let i = 0; i < total; i++) {
     const v = lum[i];
@@ -337,7 +394,9 @@ export async function colorizeImage(
     outRgb[i * 3 + 2] = v;
   }
 
-  // Color each region
+  // Color each region: largest → palette[0] (main/natural color),
+  // second largest → palette[1], third → palette[2], etc.
+  // For objects with few natural colors, palette cycles.
   regions.forEach((region, i) => {
     const color: RGB = palette[i % palette.length];
     for (const idx of region.pixels) {
