@@ -111,8 +111,26 @@ export function CoverGenerator({
         pageCount: data.pageCount,
         fileName: data.fileName,
       });
+
+      // Save cover to Blob + Turso so it appears in the book list
+      try {
+        await fetch("/api/save-cover", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            pdfData: data.pdf,
+            title: title.trim(),
+            author: author.trim(),
+            pageCount,
+            fileName: data.fileName,
+          }),
+        });
+      } catch {
+        // non-fatal — cover is still downloadable
+      }
+
       toast.success("Cover generated!", {
-        description: `${pageCount} pages · ${coverWidthInches}" wide`,
+        description: `${pageCount} pages · ${coverWidthInches}" wide · Added to book list`,
       });
     } catch (e) {
       toast.error("Cover generation failed", {

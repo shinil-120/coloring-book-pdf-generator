@@ -812,6 +812,12 @@ const CATEGORY_THEMES: Record<string, CategoryTheme> = {
     badgeText: "text-cyan-700",
     emoji: "🦅",
   },
+  Cover: {
+    gradient: "from-indigo-400 to-violet-500",
+    badgeBg: "bg-indigo-50 border-indigo-200",
+    badgeText: "text-indigo-700",
+    emoji: "📕",
+  },
 };
 
 const DEFAULT_THEME: CategoryTheme = {
