@@ -384,3 +384,57 @@ Stage Summary:
 - All existing features preserved (search, filter, sort, grid/list, batch download, preview modals, drag-and-drop editor, KDP specs panel)
 - Key new files: `src/components/merge-books.tsx`, `src/app/api/merge-books/route.ts`
 - Next opportunities: custom page upload, print preview, export to PNG/SVG, book templates
+
+---
+Task ID: cron-review-6
+Agent: Z.ai Code (webDevReview cron — round 6)
+Task: Assess project status, perform QA testing, add KDP Cover Generator feature.
+
+Work Log:
+- Reviewed worklog — project had 7 books, merge books, batch download, sort, preview modals, KDP specs panel, all working
+- QA tested with agent-browser + VLM: Tab 1 (7 books), Tab 2 (merge + editor), all stable
+- VLM suggested "Custom Cover Builder" as the most valuable missing feature for KDP creators
+
+New feature implemented this round:
+**KDP Cover Generator** 📕
+A full paperback cover generator that creates a KDP-ready cover PDF (back + spine + front):
+- "Cover Generator" CTA button on Tab 2 SelectStep (indigo gradient card with BookOpen icon)
+- New `CoverGenerator` component (`src/components/cover-generator.tsx`) with:
+  - Book selection grid (determines page count → spine width)
+  - Title, subtitle, author text fields
+  - 8 preset color themes (Sunset, Ocean, Forest, Berry, Fire, Twilight, Candy, Mint)
+  - Live preview showing scaled cover with back/spine/front layout
+  - Live specs panel: page count, spine width, cover width, height
+  - "Generate Cover PDF" button
+  - Success screen with stats (pages, spine, width) + download button
+- New API route `/api/generate-cover` using pdf-lib:
+  - Calculates spine width: pageCount × 0.002252" (KDP white paper formula)
+  - Full cover width = 8.5" + spine + 8.5", height = 11.25" (with 0.125" bleed)
+  - Draws gradient background (120 horizontal stripes interpolating 2 colors)
+  - Spine band (darker shade) with vertical title text
+  - Front cover: title (42pt bold), subtitle, author, decorative bars
+  - Back cover: description text, barcode placeholder
+  - Returns data-uri PDF + dimensions + fileName
+
+Bug fixed during development:
+- Initial implementation used PDFKit which failed with "ENOENT: /ROOT/node_modules/pdfkit/js/data/Helvetica.afm" — PDFKit's built-in font path resolution breaks in the Next.js serverless environment
+- Rewrote the entire route using pdf-lib (which has Helvetica built-in without external files) — same visual output, no font file dependencies
+
+QA verification:
+- Cover Generator button: VLM confirmed visible on SelectStep
+- Cover builder UI: VLM confirmed form fields, book grid, color theme picker, live preview
+- Generated cover: "KDP Cover Ready" success screen with 5 pages, 0.011" spine, 17.01" width
+- API test (100 pages): width 1240pts (17.2"), spine 16.2pts — correct KDP dimensions
+- Clean lint (0 errors, 0 warnings)
+- POST /api/generate-cover 200 in 400ms
+
+Stage Summary:
+- **Status: KDP COVER GENERATOR ADDED**
+- New high-value feature: generate full paperback covers with automatic spine sizing
+- Complete flow: select book → enter title/author → pick theme → generate → download
+- New API route `/api/generate-cover` (pdf-lib based, no external font deps)
+- New `CoverGenerator` component with live preview + 8 color themes
+- Bug fixed: PDFKit font path issue → switched to pdf-lib
+- All existing features preserved (search, filter, sort, grid/list, batch download, preview modals, drag-and-drop editor, merge books, KDP specs panel)
+- Key new files: `src/components/cover-generator.tsx`, `src/app/api/generate-cover/route.ts`
+- Next opportunities: custom page upload, print preview, export to PNG/SVG, book templates, AI cover art

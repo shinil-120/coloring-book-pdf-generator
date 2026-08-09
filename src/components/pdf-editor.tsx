@@ -36,6 +36,7 @@ import {
   CheckCircle2,
   Palette,
   Layers,
+  BookOpen,
   Download,
   RefreshCw,
   AlertCircle,
@@ -54,6 +55,7 @@ import {
 } from "@/components/ui/dialog";
 import { getCategoryTheme } from "@/lib/coloring-data";
 import { MergeBooks } from "@/components/merge-books";
+import { CoverGenerator } from "@/components/cover-generator";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -79,7 +81,7 @@ interface EditPage {
   isBlank: boolean;
 }
 
-type Step = "select" | "edit" | "download" | "merge";
+type Step = "select" | "edit" | "download" | "merge" | "cover";
 
 // ---------------------------------------------------------------------------
 // Main component
@@ -367,12 +369,17 @@ export function PdfEditor() {
         loadingBook={loadingPages ? selectedBook?.slug ?? null : null}
         onRetry={fetchBooks}
         onMerge={() => setStep("merge")}
+        onCover={() => setStep("cover")}
       />
     );
   }
 
   if (step === "merge") {
     return <MergeBooks books={books} onBack={() => setStep("select")} />;
+  }
+
+  if (step === "cover") {
+    return <CoverGenerator books={books} onBack={() => setStep("select")} />;
   }
 
   if (step === "download") {
@@ -611,6 +618,7 @@ function SelectStep({
   loadingBook,
   onRetry,
   onMerge,
+  onCover,
 }: {
   books: BookMeta[];
   loading: boolean;
@@ -618,6 +626,7 @@ function SelectStep({
   loadingBook: string | null;
   onRetry: () => void;
   onMerge: () => void;
+  onCover: () => void;
 }) {
   return (
     <div className="space-y-6">
@@ -638,24 +647,42 @@ function SelectStep({
               rearrange pages, delete, duplicate, and insert KDP blank pages.
             </p>
           </div>
-          {/* Merge Books CTA */}
+          {/* CTA buttons: Merge Books + Cover Generator */}
           {!loading && books.length > 0 && (
-            <button
-              onClick={onMerge}
-              className="group flex shrink-0 items-center gap-3 rounded-2xl border-2 border-fuchsia-300 bg-white/80 p-3 text-left shadow-sm backdrop-blur transition-all hover:border-fuchsia-400 hover:shadow-md"
-            >
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-fuchsia-500 to-pink-500 text-white shadow-sm transition-transform group-hover:scale-110">
-                <Layers className="h-5 w-5" />
-              </div>
-              <div>
-                <div className="text-sm font-extrabold text-stone-800">
-                  Merge Books
+            <div className="flex shrink-0 flex-col gap-2 sm:flex-row">
+              <button
+                onClick={onMerge}
+                className="group flex shrink-0 items-center gap-3 rounded-2xl border-2 border-fuchsia-300 bg-white/80 p-3 text-left shadow-sm backdrop-blur transition-all hover:border-fuchsia-400 hover:shadow-md"
+              >
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-fuchsia-500 to-pink-500 text-white shadow-sm transition-transform group-hover:scale-110">
+                  <Layers className="h-5 w-5" />
                 </div>
-                <div className="text-[11px] font-medium text-stone-500">
-                  Combine multiple into one
+                <div>
+                  <div className="text-sm font-extrabold text-stone-800">
+                    Merge Books
+                  </div>
+                  <div className="text-[11px] font-medium text-stone-500">
+                    Combine multiple into one
+                  </div>
                 </div>
-              </div>
-            </button>
+              </button>
+              <button
+                onClick={onCover}
+                className="group flex shrink-0 items-center gap-3 rounded-2xl border-2 border-indigo-300 bg-white/80 p-3 text-left shadow-sm backdrop-blur transition-all hover:border-indigo-400 hover:shadow-md"
+              >
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-500 text-white shadow-sm transition-transform group-hover:scale-110">
+                  <BookOpen className="h-5 w-5" />
+                </div>
+                <div>
+                  <div className="text-sm font-extrabold text-stone-800">
+                    Cover Generator
+                  </div>
+                  <div className="text-[11px] font-medium text-stone-500">
+                    KDP paperback cover
+                  </div>
+                </div>
+              </button>
+            </div>
           )}
         </div>
       </div>
