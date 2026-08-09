@@ -77,7 +77,8 @@ export function ColoringBookGenerator() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/downloads/coloring-books.json", {
+      // Fetch from /api/books — uses Turso in production, local JSON fallback
+      const res = await fetch("/api/books", {
         cache: "no-store",
       });
       if (!res.ok) {

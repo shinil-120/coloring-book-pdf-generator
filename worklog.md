@@ -570,3 +570,65 @@ Stage Summary:
 - 4.2 MB PDF, 30 thumbnails, 30 items (Dog through Finch)
 - Colorization uses closed-lines-only algorithm: body gets natural main color, enclosed sub-regions (nose, ears, legs, etc.) get other palette colors
 - App shows 1 book with 30 pages
+
+---
+Task ID: turso-blob-migration
+Agent: Z.ai Code (user-requested production deployment prep)
+Task: Migrate to Turso (metadata) + Vercel Blob (file storage) for production deployment.
+
+Work Log:
+- Installed packages: @libsql/client, @prisma/adapter-libsql, @vercel/blob
+- Updated prisma/schema.prisma:
+  - Changed provider from sqlite to libsql (Turso)
+  - Added ColoringBook model (slug, name, category, pages, sizeBytes, pdfUrl, items, timestamps)
+  - Added GeneratedCover model for cover PDFs
+  - Added indexes on category and createdAt
+- Created src/lib/turso.ts — Turso data access layer:
+  - Prisma client with PrismaLibSql adapter (singleton pattern)
+  - Returns null if TURSO_DATABASE_URL not set (local fallback)
+  - CRUD: listBooks, getBook, upsertBook, deleteBook
+  - BookMeta type mirrors JSON format for backward compatibility
+  - isTursoConfigured() helper
+- Created src/lib/blob-storage.ts — Vercel Blob file storage:
+  - uploadPdf, uploadThumbnail, uploadCover helpers
+  - Falls back to local public/downloads/ if BLOB_READ_WRITE_TOKEN not set
+  - readFile() fetches from Blob URL or reads local file
+  - deleteFile() works with both Blob and local
+- Created src/app/api/books/route.ts — unified books API:
+  - GET /api/books reads from Turso if configured, else local JSON
+  - Returns { success, books, source: "turso"|"local"|"none" }
+- Updated src/lib/db.ts — re-exports prisma from turso.ts (backward compat)
+- Updated frontend to fetch from /api/books:
+  - coloring-book-generator.tsx (Tab 1)
+  - pdf-editor.tsx (Tab 2)
+- Created scripts/migrate-to-turso.ts — migration script:
+  - Reads existing coloring-books.json
+  - Uploads PDFs to Vercel Blob
+  - Uploads thumbnails to Vercel Blob
+  - Creates Turso records for each book
+- Created .env.example — documents all required env vars
+- Updated .gitignore — allows .env.example but ignores .env.local
+- Created DEPLOYMENT.md — complete deployment guide
+
+Architecture:
+- Read path: /api/books → Turso (if configured) → local JSON fallback
+- Write path: scripts generate locally → migrate-to-turso.ts uploads to Blob + Turso
+- File storage: Vercel Blob (production) / local public/downloads/ (dev fallback)
+- Metadata: Turso (production) / coloring-books.json (dev fallback)
+
+QA verification:
+- Clean lint (0 errors, 0 warnings)
+- /api/books returns source: "local", 1 book (Pets) — fallback working
+- App renders correctly, shows Pets Coloring Book with 30 pages
+- VLM confirmed app works end-to-end
+
+Stage Summary:
+- **Turso + Vercel Blob migration COMPLETE** (code-level)
+- App works with local fallback (no env vars needed for dev)
+- Ready for production once user provides tokens:
+  - TURSO_DATABASE_URL, TURSO_AUTH_TOKEN
+  - BLOB_READ_WRITE_TOKEN
+  - ZAI_API_KEY
+- Deployment guide in DEPLOYMENT.md
+- Migration script ready: scripts/migrate-to-turso.ts
+- All existing features preserved (search, filter, sort, grid/list, batch download, preview modals, drag-and-drop editor, merge books, cover generator, final assembly)

@@ -128,7 +128,7 @@ export function PdfEditor() {
   const fetchBooks = useCallback(async () => {
     setLoadingBooks(true);
     try {
-      const res = await fetch("/downloads/coloring-books.json", {
+      const res = await fetch("/api/books", {
         cache: "no-store",
       });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
