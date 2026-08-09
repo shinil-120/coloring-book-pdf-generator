@@ -37,7 +37,6 @@ yarn-error.log*
 # vercel
 .vercel
 
-
 # typescript
 *.tsbuildinfo
 next-env.d.ts
@@ -53,3 +52,18 @@ prompt
 server.log
 # Skills directory
 /skills/
+
+# Generated coloring book content (uploaded to Vercel Blob in production)
+/coloring-books/
+
+# Generated PDFs, thumbnails, and metadata (migrated to Turso + Blob)
+/public/downloads/*.pdf
+/public/downloads/coloring-books.json
+/public/downloads/thumbnails/
+!/public/downloads/.gitkeep
+
+# Internal scripts
+/.zscripts/
+
+# Prisma local DB
+/db/
