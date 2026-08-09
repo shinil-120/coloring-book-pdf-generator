@@ -12,8 +12,6 @@ import {
   FileText,
   Ruler,
   LayoutGrid,
-  Images,
-  Rows3,
   Type,
   Zap,
   ZapOff,
@@ -59,8 +57,6 @@ interface PageData {
 const DESIGN_STYLES = [
   { id: "classic", name: "Classic", icon: Type, desc: "Title-focused, clean" },
   { id: "gallery", name: "Gallery", icon: LayoutGrid, desc: "3×2 thumbnail grid" },
-  { id: "collage", name: "Collage", icon: Images, desc: "Overlapping images" },
-  { id: "banner", name: "Banner", icon: Rows3, desc: "Horizontal strip" },
   { id: "zigzag", name: "Zigzag", icon: Zap, desc: "Colored, varied sizes" },
   { id: "zigzag-mixed", name: "Mixed Zigzag", icon: ZapOff, desc: "Colored + B&W mix" },
 ];
@@ -430,20 +426,8 @@ export function CoverGenerator({
                       {/* Gallery: 3×2 grid */}
                       <div className="grid grid-cols-3 gap-0.5 w-full mb-1">
                         {bookPages.slice(0, 6).map((p, i) => (
-                          <div key={i} className="aspect-square overflow-hidden rounded-sm">
-                            <img src={p.thumbnail} alt="" className="h-full w-full object-cover opacity-80" loading="lazy" />
-                          </div>
-                        ))}
-                      </div>
-                      <span className="text-center text-[7px] font-extrabold leading-tight text-white drop-shadow">{title || "Title"}</span>
-                    </>
-                  ) : (designStyle === "collage" || designStyle === "banner") && bookPages.length > 0 ? (
-                    <>
-                      {/* Collage/Banner: scattered/strip thumbnails */}
-                      <div className={`flex ${designStyle === "banner" ? "flex-row" : "flex-wrap"} gap-0.5 w-full mb-1 justify-center`}>
-                        {bookPages.slice(0, 6).map((p, i) => (
-                          <div key={i} className={`${designStyle === "banner" ? "w-1/6" : designStyle === "collage" && (i % 2 === 0 ? "w-1/3" : "w-1/4")} aspect-square overflow-hidden rounded-sm`}>
-                            <img src={p.thumbnail} alt="" className="h-full w-full object-cover opacity-70" loading="lazy" />
+                          <div key={i} className="aspect-square overflow-hidden">
+                            <img src={p.thumbnail} alt="" className="h-full w-full object-cover opacity-90" loading="lazy" />
                           </div>
                         ))}
                       </div>
@@ -460,7 +444,7 @@ export function CoverGenerator({
                           return (
                             <div
                               key={i}
-                              className={`absolute ${sizes[i % sizes.length]} aspect-square overflow-hidden rounded-sm ${isLeft ? "left-0" : "right-0"}`}
+                              className={`absolute ${sizes[i % sizes.length]} aspect-square overflow-hidden ${isLeft ? "left-0" : "right-0"}`}
                               style={{ top: `${10 + i * 14}%` }}
                             >
                               <img src={p.thumbnail} alt="" className={`h-full w-full object-cover ${isColored ? "opacity-90" : "opacity-40"}`} loading="lazy" />
