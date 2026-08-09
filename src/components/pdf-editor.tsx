@@ -35,6 +35,7 @@ import {
   X,
   CheckCircle2,
   Palette,
+  Layers,
   Download,
   RefreshCw,
   AlertCircle,
@@ -52,6 +53,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { getCategoryTheme } from "@/lib/coloring-data";
+import { MergeBooks } from "@/components/merge-books";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -77,7 +79,7 @@ interface EditPage {
   isBlank: boolean;
 }
 
-type Step = "select" | "edit" | "download";
+type Step = "select" | "edit" | "download" | "merge";
 
 // ---------------------------------------------------------------------------
 // Main component
@@ -364,8 +366,13 @@ export function PdfEditor() {
         onSelect={loadBook}
         loadingBook={loadingPages ? selectedBook?.slug ?? null : null}
         onRetry={fetchBooks}
+        onMerge={() => setStep("merge")}
       />
     );
+  }
+
+  if (step === "merge") {
+    return <MergeBooks books={books} onBack={() => setStep("select")} />;
   }
 
   if (step === "download") {
@@ -603,30 +610,53 @@ function SelectStep({
   onSelect,
   loadingBook,
   onRetry,
+  onMerge,
 }: {
   books: BookMeta[];
   loading: boolean;
   onSelect: (book: BookMeta) => void;
   loadingBook: string | null;
   onRetry: () => void;
+  onMerge: () => void;
 }) {
   return (
     <div className="space-y-6">
       {/* Intro */}
       <div className="relative overflow-hidden rounded-3xl border border-violet-200 bg-gradient-to-br from-violet-100 via-purple-50 to-fuchsia-50 p-6 shadow-sm sm:p-8">
         <div className="absolute right-0 top-0 -mr-16 -mt-16 h-56 w-56 rounded-full bg-gradient-to-br from-violet-200 to-purple-200 opacity-40 blur-2xl" />
-        <div className="relative space-y-2">
-          <div className="inline-flex items-center gap-1.5 rounded-full border border-violet-200 bg-white/70 px-3 py-1 text-xs font-bold text-violet-600">
-            <FileText className="h-3 w-3" />
-            Step 1 · Select a PDF
+        <div className="relative flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+          <div className="max-w-xl space-y-2">
+            <div className="inline-flex items-center gap-1.5 rounded-full border border-violet-200 bg-white/70 px-3 py-1 text-xs font-bold text-violet-600">
+              <FileText className="h-3 w-3" />
+              Step 1 · Select a PDF
+            </div>
+            <h2 className="text-2xl font-extrabold tracking-tight text-stone-800 sm:text-3xl">
+              Choose a coloring book to edit
+            </h2>
+            <p className="text-sm font-medium text-stone-600">
+              Load any generated PDF into the editor. You&apos;ll be able to
+              rearrange pages, delete, duplicate, and insert KDP blank pages.
+            </p>
           </div>
-          <h2 className="text-2xl font-extrabold tracking-tight text-stone-800 sm:text-3xl">
-            Choose a coloring book to edit
-          </h2>
-          <p className="max-w-xl text-sm font-medium text-stone-600">
-            Load any generated PDF into the editor. You&apos;ll be able to
-            rearrange pages, delete, duplicate, and insert KDP blank pages.
-          </p>
+          {/* Merge Books CTA */}
+          {!loading && books.length > 0 && (
+            <button
+              onClick={onMerge}
+              className="group flex shrink-0 items-center gap-3 rounded-2xl border-2 border-fuchsia-300 bg-white/80 p-3 text-left shadow-sm backdrop-blur transition-all hover:border-fuchsia-400 hover:shadow-md"
+            >
+              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-fuchsia-500 to-pink-500 text-white shadow-sm transition-transform group-hover:scale-110">
+                <Layers className="h-5 w-5" />
+              </div>
+              <div>
+                <div className="text-sm font-extrabold text-stone-800">
+                  Merge Books
+                </div>
+                <div className="text-[11px] font-medium text-stone-500">
+                  Combine multiple into one
+                </div>
+              </div>
+            </button>
+          )}
         </div>
       </div>
 

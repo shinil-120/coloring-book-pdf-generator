@@ -336,3 +336,51 @@ Stage Summary:
 - VLM design rating: stable, polished
 - All existing features preserved (search, filter, sort, grid/list, batch download, preview modals, drag-and-drop, page preview)
 - Next opportunities: custom page upload, print preview, book merge/compilation, export to PNG/SVG
+
+---
+Task ID: cron-review-5
+Agent: Z.ai Code (webDevReview cron — round 5)
+Task: Assess project status, perform QA testing, add Merge Books compilation feature.
+
+Work Log:
+- Reviewed worklog — project had 7 books, batch download, sort, preview modals, KDP specs panel, proportion bar, all working
+- QA tested with agent-browser + VLM: Tab 1 (7 books), Tab 2 (load Pets → 5 pages), all stable
+- VLM suggested "Merge & Compile" as the most critical missing feature for KDP creators
+
+New feature implemented this round:
+**Merge Books — Compilation Builder** 📦
+A full merge/compilation flow that lets users combine pages from multiple books into one PDF:
+- "Merge Books" CTA button on Tab 2 SelectStep (fuchsia gradient card with Layers icon)
+- New `MergeBooks` component (`src/components/merge-books.tsx`) with:
+  - Left: grid of available books (click to add/remove from compilation)
+  - Right: sticky "Your Compilation" sidebar showing selected books with +/- page steppers
+  - KDP blanks toggle (Switch) — optionally insert blank pages between content
+  - Live totals: Content / Blank / Total page counts
+  - Visual proportion bar (fuchsia content + grey blank)
+  - "Create Compilation (Np)" button
+  - Success screen with package icon, stats grid, download button, "Back to Merge Builder" option
+- New API route `/api/merge-books` using pdf-lib:
+  - Takes `{ books: [{slug, pages}], addBlanks }`
+  - Loads each source PDF, copies first N pages from each in order
+  - Optionally inserts 612×792 blank pages between content pages
+  - Returns data-uri PDF + page counts + descriptive filename
+
+QA verification:
+- Merge Books button: VLM confirmed visible on SelectStep
+- Merge builder: VLM confirmed book grid + "Your Compilation" sidebar + KDP blanks toggle
+- Selected 3 books (Pets, Dragons, Dinosaurs): VLM confirmed 3 selected with steppers, counts (15 content, 0 blank, 15 total), "Create Compilation (15p)" button
+- Clicked Create → "Compilation ready! 15 pages assembled" + Download button
+- Success screen: VLM confirmed "Compilation Ready!" heading, package icon, 15/15/0 stats, download button
+- API: POST /api/merge-books 200 in 492ms
+- Clean lint (0 errors, 0 warnings)
+
+Stage Summary:
+- **Status: MERGE/COMPILATION FEATURE ADDED**
+- New high-value feature: combine pages from multiple books into one compilation PDF
+- Full flow: select books → adjust page counts → optional KDP blanks → merge → download
+- New API route `/api/merge-books` (pdf-lib based)
+- New `MergeBooks` component with live totals + proportion bar + success screen
+- "Merge Books" CTA on Tab 2 SelectStep
+- All existing features preserved (search, filter, sort, grid/list, batch download, preview modals, drag-and-drop editor, KDP specs panel)
+- Key new files: `src/components/merge-books.tsx`, `src/app/api/merge-books/route.ts`
+- Next opportunities: custom page upload, print preview, export to PNG/SVG, book templates
