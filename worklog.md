@@ -474,3 +474,51 @@ Stage Summary:
 - Aggressive gap-closing (14 passes) + enclosed-region-only coloring
 - All 7 books regenerated with improved colorization
 - Pets PDF grew from 477KB to 577KB (more colored pixels from better region detection)
+
+---
+Task ID: closed-lines-only
+Agent: Z.ai Code (user-requested colorization refinement)
+Task: Only color regions bounded by closed lines; no forced minimum; body gets natural color, sub-regions get other colors.
+
+Work Log:
+- User clarified: only make regions if closed lines exist. If a dog's nose is a closed circle, that's a region. If no other closed regions exist, the image has only 2 regions (body + nose). The larger region (body) gets the natural color; the nose gets a different color. No forced 3-region minimum.
+
+Rewrote colorizeImage in scripts/image-pipeline.ts with cleaner 3-step logic:
+
+**STEP 1 — Find enclosed sub-regions (closed-line areas):**
+- Flood-fill from every unvisited white pixel using the gap-closed mask
+- Keep only NON-border-touching regions (truly enclosed by closed lines)
+- These are areas like nose, eyes, ears — bounded by closed outlines
+- minSize=10 to filter tiny noise
+
+**STEP 2 — Center-fill to find the BODY region:**
+- Compute bbox of all black pixels, find center point
+- Flood-fill FROM center outward, stopping at black lines
+- This naturally EXCLUDES enclosed sub-regions (nose, eyes) because black outlines stop the fill
+- The body = "the whole other parts except enclosed sub-regions" — gets the natural main color
+- If center is on a black pixel, spiral-search for nearest white pixel
+
+**STEP 3 — Combine & color:**
+- regions = [body (largest), ...subRegions (sorted by size)]
+- body → palette[0] (natural main color)
+- sub-regions → palette[1], palette[2], etc.
+- NO forced minimum — if no enclosed sub-regions exist, only the body is colored
+
+Key changes from previous version:
+- Removed "ensure at least 3 regions" logic entirely
+- Center-fill is now the PRIMARY method (not just a fallback)
+- Body region always comes first (gets palette[0])
+- Sub-regions only come from genuinely closed-line areas
+- minSize raised to 10 (was 3) to filter noise
+
+VLM verification:
+- Dog: no box, 3 regions (brown body, light tan, black nose/eye) — body has natural tan color ✓
+- Rabbit: no box, 4 regions (grey body, pink, black, dark grey shadow) ✓
+- T-Rex: no box, 5 regions (body, head, tail, legs) with green main color ✓
+- Clean lint
+
+Stage Summary:
+- **Colorization follows closed lines only** — no forced regions
+- **Body (largest) = natural main color**, sub-regions = other palette colors
+- **No rectangular box** — color follows subject outline
+- All 7 books regenerated with refined colorization

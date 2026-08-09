@@ -135,6 +135,7 @@ export async function colorizeImage(
   options: { whiteThreshold?: number; minSize?: number; maxSize?: number; closeGaps?: number } = {}
 ): Promise<void> {
   const whiteThreshold = options.whiteThreshold ?? 200;
+  const minSize = options.minSize ?? 10; // ignore tiny noise regions
   const maxSize = options.maxSize ?? 1000000;
   const closeGaps = options.closeGaps ?? 14; // aggressive gap-closing to seal AI line art gaps
 
@@ -197,16 +198,17 @@ export async function colorizeImage(
     for (let i = 0; i < total; i++) fillMask[i] = dilated[i];
   }
 
-  // ── Find ALL enclosed regions (non-border-touching only) ────────────
-  // NO bbox-interior extraction — this avoids the rectangular "box" of
-  // color around the subject. Only truly enclosed white regions get colored.
-  const visited = new Uint8Array(total);
+  // ── STEP 1: Find enclosed sub-regions (closed-line areas) ───────────
+  // These are areas fully enclosed by black lines — e.g. a nose drawn as
+  // a closed circle, an eye, an ear pattern. They do NOT touch the image
+  // border. We flood-fill from every unvisited white pixel and keep only
+  // regions that don't reach the border.
   interface Region {
     pixels: number[];
     size: number;
   }
-  let regions: Region[] = [];
-
+  const subRegions: Region[] = [];
+  const visited = new Uint8Array(total);
   const stack: number[] = new Array(total);
 
   for (let start = 0; start < total; start++) {
@@ -228,7 +230,6 @@ export async function colorizeImage(
     while (head < tail) {
       const idx = stack[head++];
       pixelIndices.push(idx);
-
       const y = Math.floor(idx / w);
       const x = idx % w;
 
@@ -251,139 +252,102 @@ export async function colorizeImage(
       }
     }
 
-    // Only keep NON-border-touching regions (truly enclosed areas)
-    if (!touchesBorder && pixelIndices.length > 3 && pixelIndices.length < maxSize) {
-      regions.push({ pixels: pixelIndices, size: pixelIndices.length });
+    // Keep only NON-border-touching regions (truly enclosed by closed lines)
+    // and above minSize to avoid noise
+    if (!touchesBorder && pixelIndices.length >= minSize && pixelIndices.length < maxSize) {
+      subRegions.push({ pixels: pixelIndices, size: pixelIndices.length });
     }
   }
 
-  // Sort largest first
-  regions.sort((a, b) => b.size - a.size);
-
-  // ── CENTER-FILL fallback: if no enclosed body region found ──────────
-  // If gap-closing didn't fully seal the outline, the body region leaked
-  // to the background (border-touching) and was skipped. We recover it by
-  // flood-filling FROM the center of the black-pixel bbox outward, stopping
-  // at black lines. This gives us the body region WITHOUT the rectangular
-  // box (only the area reachable from the center through white pixels).
-  if (regions.length === 0 || regions[0].size < 1000) {
-    // Find bbox of black pixels in the gap-closed mask
-    let bboxMinX = w, bboxMinY = h, bboxMaxX = 0, bboxMaxY = 0;
-    for (let y = 0; y < h; y++) {
-      for (let x = 0; x < w; x++) {
-        if (fillMask[y * w + x] === 1) {
-          if (x < bboxMinX) bboxMinX = x;
-          if (x > bboxMaxX) bboxMaxX = x;
-          if (y < bboxMinY) bboxMinY = y;
-          if (y > bboxMaxY) bboxMaxY = y;
-        }
+  // ── STEP 2: Center-fill to find the BODY region ─────────────────────
+  // The body = everything reachable from the center of the subject,
+  // stopping at black lines. This naturally EXCLUDES enclosed sub-regions
+  // (like a nose) because the black outline stops the fill.
+  // This is the "larger region" that gets the natural main color.
+  let bboxMinX = w, bboxMinY = h, bboxMaxX = 0, bboxMaxY = 0;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (fillMask[y * w + x] === 1) {
+        if (x < bboxMinX) bboxMinX = x;
+        if (x > bboxMaxX) bboxMaxX = x;
+        if (y < bboxMinY) bboxMinY = y;
+        if (y > bboxMaxY) bboxMaxY = y;
       }
     }
-    const cx = Math.floor((bboxMinX + bboxMaxX) / 2);
-    const cy = Math.floor((bboxMinY + bboxMaxY) / 2);
+  }
+  const cx = Math.floor((bboxMinX + bboxMaxX) / 2);
+  const cy = Math.floor((bboxMinY + bboxMaxY) / 2);
 
-    // Flood-fill from center using a FRESH visited array (separate from
-    // the border-based fill above)
+  const bodyRegion: Region | null = (() => {
+    // If center is on a black pixel, search nearby for a white pixel
+    let startIdx = cy * w + cx;
+    if (fillMask[startIdx] === 1) {
+      // Spiral search for nearest white pixel
+      let found = -1;
+      for (let r = 1; r < 50 && found === -1; r++) {
+        for (let dy = -r; dy <= r && found === -1; dy++) {
+          for (let dx = -r; dx <= r && found === -1; dx++) {
+            const nx = cx + dx;
+            const ny = cy + dy;
+            if (nx < 0 || nx >= w || ny < 0 || ny >= h) continue;
+            if (fillMask[ny * w + nx] === 0) {
+              found = ny * w + nx;
+            }
+          }
+        }
+      }
+      if (found === -1) return null;
+      startIdx = found;
+    }
+
     const centerVisited = new Uint8Array(total);
     const centerStack: number[] = new Array(total);
     let head = 0;
     let tail = 0;
-    const centerStart = cy * w + cx;
+    centerStack[tail++] = startIdx;
+    centerVisited[startIdx] = 1;
+    const centerPixels: number[] = [];
 
-    if (fillMask[centerStart] === 0) {
-      centerStack[tail++] = centerStart;
-      centerVisited[centerStart] = 1;
-      const centerPixels: number[] = [];
-
-      while (head < tail) {
-        const idx = centerStack[head++];
-        centerPixels.push(idx);
-        const y = Math.floor(idx / w);
-        const x = idx % w;
-        for (let dy = -1; dy <= 1; dy++) {
-          const ny = y + dy;
-          if (ny < 0 || ny >= h) continue;
-          for (let dx = -1; dx <= 1; dx++) {
-            if (dx === 0 && dy === 0) continue;
-            const nx = x + dx;
-            if (nx < 0 || nx >= w) continue;
-            const nidx = ny * w + nx;
-            if (centerVisited[nidx]) continue;
-            if (fillMask[nidx] === 1) continue;
-            centerVisited[nidx] = 1;
-            centerStack[tail++] = nidx;
-          }
+    while (head < tail) {
+      const idx = centerStack[head++];
+      centerPixels.push(idx);
+      const y = Math.floor(idx / w);
+      const x = idx % w;
+      for (let dy = -1; dy <= 1; dy++) {
+        const ny = y + dy;
+        if (ny < 0 || ny >= h) continue;
+        for (let dx = -1; dx <= 1; dx++) {
+          if (dx === 0 && dy === 0) continue;
+          const nx = x + dx;
+          if (nx < 0 || nx >= w) continue;
+          const nidx = ny * w + nx;
+          if (centerVisited[nidx]) continue;
+          if (fillMask[nidx] === 1) continue;
+          centerVisited[nidx] = 1;
+          centerStack[tail++] = nidx;
         }
       }
+    }
 
-      if (centerPixels.length > 100) {
-        // Add the center-filled body as the LARGEST region (it's the main body)
-        regions.unshift({ pixels: centerPixels, size: centerPixels.length });
-        // Re-sort
-        regions.sort((a, b) => b.size - a.size);
-      }
+    if (centerPixels.length > 100) {
+      return { pixels: centerPixels, size: centerPixels.length };
     }
-  }
+    return null;
+  })();
 
-  // ── Ensure at least 3 colorizable regions ───────────────────────────
-  // If we have fewer than 3 regions, progressively lower minSize to find
-  // smaller enclosed areas. This ensures multi-color coloring even for
-  // simple objects.
-  if (regions.length < 3) {
-    // Re-scan for smaller regions that were filtered by the >3 minSize
-    const smallRegions: Region[] = [];
-    for (let start = 0; start < total; start++) {
-      if (visited[start] || fillMask[start] === 1) continue;
-      // Check if this pixel is part of a small enclosed region
-      let head = 0;
-      let tail = 0;
-      stack[tail++] = start;
-      visited[start] = 1;
-      const pix: number[] = [];
-      let touchesB = false;
-      const sy = Math.floor(start / w);
-      const sx = start % w;
-      if (sx === 0 || sx === w - 1 || sy === 0 || sy === h - 1) touchesB = true;
-      while (head < tail) {
-        const idx = stack[head++];
-        pix.push(idx);
-        const y = Math.floor(idx / w);
-        const x = idx % w;
-        for (let dy = -1; dy <= 1; dy++) {
-          const ny = y + dy;
-          if (ny < 0 || ny >= h) continue;
-          for (let dx = -1; dx <= 1; dx++) {
-            if (dx === 0 && dy === 0) continue;
-            const nx = x + dx;
-            if (nx < 0 || nx >= w) continue;
-            const nidx = ny * w + nx;
-            if (visited[nidx]) continue;
-            if (fillMask[nidx] === 1) continue;
-            visited[nidx] = 1;
-            if (nx === 0 || nx === w - 1 || ny === 0 || ny === h - 1) touchesB = true;
-            stack[tail++] = nidx;
-          }
-        }
-      }
-      if (!touchesB && pix.length >= 1 && pix.length < maxSize) {
-        smallRegions.push({ pixels: pix, size: pix.length });
-      }
-    }
-    // Merge small regions into the main list (avoiding duplicates)
-    const existingPixelSets = new Set<number>();
-    for (const r of regions) {
-      for (const p of r.pixels) existingPixelSets.add(p);
-    }
-    for (const r of smallRegions) {
-      // Only add if not already covered
-      const hasNew = r.pixels.some((p) => !existingPixelSets.has(p));
-      if (hasNew) {
-        regions.push(r);
-        for (const p of r.pixels) existingPixelSets.add(p);
-      }
-    }
-    regions.sort((a, b) => b.size - a.size);
+  // ── STEP 3: Combine regions — body (largest) + enclosed sub-regions ─
+  // The body region gets palette[0] (natural main color).
+  // Enclosed sub-regions (nose, eyes, etc.) get palette[1], [2], etc.
+  // sorted by size (largest sub-region first).
+  // NO forced minimum — if there are no enclosed sub-regions, only the
+  // body is colored.
+  const regions: Region[] = [];
+  if (bodyRegion) {
+    regions.push(bodyRegion);
   }
+  // Sort sub-regions largest first, then append
+  subRegions.sort((a, b) => b.size - a.size);
+  regions.push(...subRegions);
 
   // ── Build output: black lines stay, white background stays, regions colored
   const outRgb = Buffer.alloc(total * 3);
@@ -394,9 +358,8 @@ export async function colorizeImage(
     outRgb[i * 3 + 2] = v;
   }
 
-  // Color each region: largest → palette[0] (main/natural color),
-  // second largest → palette[1], third → palette[2], etc.
-  // For objects with few natural colors, palette cycles.
+  // Color: body (regions[0]) → palette[0] (main natural color),
+  // sub-regions → palette[1], palette[2], etc.
   regions.forEach((region, i) => {
     const color: RGB = palette[i % palette.length];
     for (const idx of region.pixels) {
