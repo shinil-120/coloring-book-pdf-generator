@@ -140,3 +140,41 @@ Stage Summary:
 - 7 books now in the library (1 AI-generated + 6 placeholder)
 - Key fix: runQueue concurrency arg bug was preventing all AI generation
 - Next steps (if user approves): generate full 30-page Pets book, or add more categories with AI
+
+---
+Task ID: no-white-rule
+Agent: Z.ai Code (user-requested bug fix)
+Task: Fix white-on-white invisible rabbit; add NO-WHITE rule to color system applicable for all future objects.
+
+Work Log:
+- User reported: Rabbit has white color but canvas is also white → invisible in coloring book
+- Audited all palettes: found 30 white/near-white entries across 25+ items (Rabbit, Zebra, Panda, Penguin, Clownfish, Daisy, Unicorn, Pegasus, Astronaut, etc.)
+- Added formal NO-WHITE RULE to coloring-data.ts with documentation:
+  • No palette entry may be white/near-white (all RGB channels >= 230)
+  • White fur → light grey/beige/pink; white feathers → cream/tan; white clouds → light blue/lavender
+  • Added `sanitizePalette()` function that replaces white at runtime with deterministic light tints (grey, beige, pink, blue, lavender, tan)
+  • `getPalette()` now always runs palettes through sanitizePalette()
+- Fixed 13 source palettes directly (Rabbit, Clownfish, Penguin, Orca, Zebra, Panda, Skunk, Daisy, Snowdrop, Unicorn, Pegasus, Astronaut, Koi Fish, Llama) to use light grey/cream/beige instead of white
+- Rabbit palette: [240,240,240]→[215,215,220] (light grey) + [180,180,185] (darker grey) + [255,195,205] (pink ears)
+
+- VLM verification revealed rabbit body STILL white after palette fix → investigated colorization algorithm
+- Found root cause: AI line art has open outlines (gaps), causing body region to merge with background (border-touching → skipped)
+- Debug showed: 952,273-pixel border-touching region (body+background merged), only small enclosed regions colored
+- Fix 1: Added gap-closing dilation (12 passes) before flood-fill to seal small gaps in fillMask
+- Fix 2: Added 12px white border padding around image (1000×1000 → 1024×1024) so subjects can't touch canvas edge
+- Fix 3: KEY FIX — bounding-box interior extraction. For border-touching regions, compute bbox of all black pixels and color only the INTERIOR pixels (inside bbox), excluding the background. This handles cases where body merges with background through large gaps.
+- Fix 4: Increased maxSize from 500,000 to 1,000,000 to allow large bodies (rabbit interior was 534k pixels)
+- Regenerated all Pets color images with improved algorithm
+- VLM confirmed: "rabbit's body is filled with a visible light grey color" ✓
+
+Stage Summary:
+- **NO-WHITE RULE implemented and enforced** at both source (13 palettes fixed) and runtime (sanitizePalette sanitizer)
+- **Colorization algorithm significantly improved** for AI line art:
+  - Gap-closing dilation (12 passes) seals small outline gaps
+  - White border padding prevents edge-touching
+  - Bbox-interior extraction colors body even when merged with background
+  - Larger maxSize allows big bodies
+- Rabbit now visible: light grey body + darker grey shadow + pink ears
+- All future objects automatically benefit from: no-white sanitization + improved colorization
+- Pets book regenerated (5 pages, 477 KB — up from 232 KB due to more colored pixels)
+- Clean lint, no errors

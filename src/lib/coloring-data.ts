@@ -269,12 +269,12 @@ export const NATURAL_PALETTES: Record<string, Palette> = {
   Eel: [[80, 100, 120], [50, 70, 90], [130, 150, 170]],
   Stingray: [[120, 130, 140], [90, 100, 110], [180, 190, 200]],
   Pufferfish: [[255, 200, 80], [220, 160, 50], [255, 230, 150]],
-  Clownfish: [[255, 130, 30], [255, 255, 255], [40, 30, 30]],
+  Clownfish: [[255, 130, 30], [220, 220, 225], [40, 30, 30]],    // orange body + light grey stripes (not white) + black outlines
   Angelfish: [[255, 220, 80], [80, 150, 200], [40, 30, 30]],
   Swordfish: [[90, 110, 130], [60, 80, 100], [160, 180, 195]],
   Seal: [[120, 120, 130], [90, 90, 100], [180, 180, 190]],
   Walrus: [[150, 120, 100], [120, 90, 70], [200, 175, 155]],
-  Penguin: [[40, 40, 50], [255, 255, 255], [240, 180, 60]],
+  Penguin: [[40, 40, 50], [215, 215, 220], [240, 180, 60]],      // black back + light grey belly (not white) + yellow beak
   "Sea Otter": [[120, 90, 60], [90, 65, 40], [170, 140, 110]],
   Manatee: [[140, 150, 150], [110, 120, 120], [180, 185, 185]],
   "Hermit Crab": [[200, 140, 80], [220, 80, 60], [160, 110, 60]],
@@ -282,7 +282,7 @@ export const NATURAL_PALETTES: Record<string, Palette> = {
   Coral: [[255, 130, 130], [255, 170, 130], [230, 100, 150]],
   "Sea Anemone": [[220, 120, 180], [180, 90, 150], [240, 170, 210]],
   "Manta Ray": [[60, 70, 90], [40, 50, 70], [120, 130, 145]],
-  Orca: [[30, 30, 40], [255, 255, 255], [60, 60, 70]],
+  Orca: [[30, 30, 40], [210, 212, 218], [60, 60, 70]],          // black + light grey patches (not white) + dark grey
   "Moray Eel": [[60, 100, 80], [40, 70, 55], [100, 140, 115]],
 
   // ---- Wild Animals ----
@@ -290,7 +290,7 @@ export const NATURAL_PALETTES: Record<string, Palette> = {
   Tiger: [[255, 160, 50], [40, 30, 30], [255, 220, 180]],
   Elephant: [[130, 120, 110], [100, 90, 80], [170, 160, 150]],
   Giraffe: [[255, 200, 100], [160, 110, 60], [255, 230, 180]],
-  Zebra: [[255, 255, 255], [30, 30, 30], [200, 200, 200]],
+  Zebra: [[218, 218, 220], [30, 30, 30], [170, 170, 175]],       // light grey body (not white) + black stripes + grey
   Bear: [[140, 90, 60], [100, 65, 40], [180, 130, 100]],
   Monkey: [[150, 110, 70], [110, 80, 50], [200, 170, 140]],
   Kangaroo: [[180, 140, 100], [140, 100, 70], [220, 190, 160]],
@@ -305,8 +305,8 @@ export const NATURAL_PALETTES: Record<string, Palette> = {
   Moose: [[120, 90, 60], [90, 65, 40], [170, 140, 110]],
   Bison: [[140, 100, 70], [100, 70, 45], [180, 145, 115]],
   Camel: [[200, 170, 120], [160, 130, 85], [230, 205, 165]],
-  Llama: [[230, 230, 230], [200, 200, 200], [245, 245, 245]],
-  Panda: [[255, 255, 255], [30, 30, 30], [220, 220, 220]],
+  Llama: [[225, 222, 218], [200, 198, 195], [150, 130, 110]],    // light beige wool (not white) + grey shadow + brown
+  Panda: [[215, 215, 218], [30, 30, 30], [190, 190, 195]],       // light grey body (not white) + black + grey
   Koala: [[150, 150, 140], [110, 110, 100], [190, 190, 180]],
   Sloth: [[170, 140, 90], [130, 100, 60], [210, 185, 145]],
   Anteater: [[150, 110, 80], [110, 75, 50], [200, 170, 140]],
@@ -314,7 +314,7 @@ export const NATURAL_PALETTES: Record<string, Palette> = {
   Porcupine: [[150, 120, 90], [110, 85, 60], [190, 165, 135]],
   Beaver: [[140, 100, 70], [100, 70, 45], [180, 145, 115]],
   Raccoon: [[180, 180, 180], [40, 40, 40], [220, 220, 220]],
-  Skunk: [[30, 30, 30], [255, 255, 255], [60, 60, 60]],
+  Skunk: [[30, 30, 30], [210, 210, 215], [60, 60, 60]],          // black + light grey stripe (not white) + dark grey
   Gorilla: [[80, 70, 65], [50, 45, 40], [130, 115, 105]],
 
   // ---- Dinosaurs (thematic — greens/browns/greys) ----
@@ -353,7 +353,7 @@ export const NATURAL_PALETTES: Record<string, Palette> = {
   Rose: [[220, 50, 70], [80, 140, 60], [120, 90, 50]],
   Sunflower: [[255, 200, 50], [255, 160, 30], [80, 140, 60]],
   Tulip: [[230, 80, 110], [80, 140, 60], [120, 90, 50]],
-  Daisy: [[255, 255, 255], [255, 200, 50], [80, 140, 60]],
+  Daisy: [[225, 222, 230], [255, 200, 50], [80, 140, 60]],       // light grey-white petals (not pure white) + yellow center + green stem
   Lily: [[255, 250, 240], [255, 180, 100], [80, 140, 60]],
   Orchid: [[200, 100, 180], [160, 70, 150], [230, 170, 215]],
   Lotus: [[255, 180, 200], [255, 140, 170], [80, 140, 60]],
@@ -370,7 +370,7 @@ export const NATURAL_PALETTES: Record<string, Palette> = {
   Violet: [[150, 100, 200], [110, 70, 160], [80, 140, 60]],
   Dandelion: [[255, 220, 80], [255, 255, 230], [80, 140, 60]],
   Bluebell: [[120, 160, 220], [90, 130, 190], [80, 140, 60]],
-  Snowdrop: [[255, 255, 255], [200, 210, 220], [80, 140, 60]],
+  Snowdrop: [[225, 225, 235], [200, 210, 220], [80, 140, 60]],   // light grey-white petals (not pure white) + pale blue + green
   Crocus: [[180, 120, 200], [140, 90, 170], [80, 140, 60]],
   Azalea: [[240, 130, 150], [240, 100, 130], [80, 140, 60]],
   Camellia: [[230, 70, 90], [200, 50, 70], [80, 140, 60]],
@@ -446,7 +446,7 @@ export const NATURAL_PALETTES: Record<string, Palette> = {
   Milkshake: [[255, 200, 220], [180, 130, 80], [255, 240, 200]],
 
   // ---- Fantasy Creatures ----
-  Unicorn: [[255, 255, 255], [255, 180, 220], [255, 220, 240]],
+  Unicorn: [[225, 225, 232], [255, 180, 220], [240, 210, 235]],  // light grey-white body (not pure white) + pink mane + lavender
   Mermaid: [[80, 180, 200], [255, 180, 130], [60, 130, 180]],
   Fairy: [[255, 180, 220], [200, 150, 255], [255, 230, 180]],
   Wizard: [[120, 80, 180], [80, 50, 140], [200, 170, 100]],
@@ -474,7 +474,7 @@ export const NATURAL_PALETTES: Record<string, Palette> = {
   Cockatrice: [[200, 160, 80], [140, 100, 50], [255, 220, 150]],
   Manticore: [[200, 130, 60], [150, 80, 40], [255, 200, 120]],
   Sphinx: [[220, 180, 110], [170, 130, 70], [255, 220, 160]],
-  Pegasus: [[255, 255, 255], [200, 220, 240], [220, 230, 245]],
+  Pegasus: [[220, 222, 230], [200, 220, 240], [215, 225, 240]],  // light grey-white body (not pure white) + sky wings + light
   Siren: [[120, 180, 200], [255, 200, 160], [80, 140, 180]],
 
   // ---- Space ----
@@ -492,7 +492,7 @@ export const NATURAL_PALETTES: Record<string, Palette> = {
   Asteroid: [[140, 130, 120], [100, 90, 80], [180, 170, 160]],
   Meteor: [[255, 150, 60], [200, 100, 40], [255, 220, 150]],
   Rocket: [[220, 220, 230], [200, 60, 60], [100, 130, 160]],
-  Astronaut: [[255, 255, 255], [200, 200, 210], [255, 200, 50]],
+  Astronaut: [[210, 212, 220], [180, 182, 190], [255, 200, 50]], // light grey suit (not white) + dark grey + yellow visor
   "Space Shuttle": [[220, 220, 230], [200, 60, 60], [100, 130, 160]],
   Satellite: [[200, 200, 210], [80, 130, 200], [150, 150, 160]],
   "Space Station": [[220, 220, 220], [180, 180, 180], [100, 130, 200]],
@@ -515,7 +515,7 @@ export const NATURAL_PALETTES: Record<string, Palette> = {
   Dog: [[180, 130, 80], [140, 100, 60], [230, 200, 160]],       // tan body + dark ear + light belly
   Cat: [[230, 140, 60], [200, 110, 40], [250, 230, 200]],        // orange tabby + dark stripes + light belly
   Hamster: [[220, 170, 100], [180, 130, 70], [250, 230, 200]],   // golden body + dark + light belly
-  Rabbit: [[240, 240, 240], [210, 210, 210], [255, 200, 200]],   // white fur + grey shadow + pink inner ear
+  Rabbit: [[215, 215, 220], [180, 180, 185], [255, 195, 205]],   // light grey fur (NOT white) + darker grey shadow + pink inner ear
   Parrot: [[220, 60, 60], [80, 140, 220], [255, 200, 50]],       // red body + blue wing + yellow tail
   Goldfish: [[255, 140, 30], [255, 200, 50], [80, 130, 180]],    // orange body + yellow fin + blue water
   "Guinea Pig": [[150, 100, 70], [100, 70, 50], [220, 190, 160]], // brown + dark patches + cream
@@ -531,7 +531,7 @@ export const NATURAL_PALETTES: Record<string, Palette> = {
   "Corn Snake": [[220, 160, 80], [200, 80, 60], [250, 220, 180]], // orange + red saddles + light belly
   "Leopard Gecko": [[255, 220, 120], [180, 130, 60], [240, 200, 130]], // yellow + dark spots + light
   "Betta Fish": [[200, 60, 120], [140, 40, 90], [120, 180, 220]], // magenta body + dark + blue fin
-  "Koi Fish": [[255, 140, 30], [255, 255, 255], [40, 40, 40]],    // orange + white + black patches
+  "Koi Fish": [[255, 140, 30], [225, 225, 230], [40, 40, 40]],  // orange + light grey patches (not white) + black
   Hedgehog: [[150, 120, 90], [100, 80, 60], [230, 210, 190]],    // brown spines + dark + cream face
   "Sugar Glider": [[160, 130, 110], [120, 95, 80], [240, 230, 220]], // grey-brown + dark stripe + light belly
   "Pot-Bellied Pig": [[120, 90, 80], [90, 65, 55], [180, 150, 140]], // dark grey + darker + light
@@ -590,18 +590,77 @@ function hashString(s: string): number {
   return h;
 }
 
+// ─────────────────────────────────────────────────────────────────────────
+// RULE: NO WHITE IN PALETTES
+// ─────────────────────────────────────────────────────────────────────────
+// A coloring book canvas is WHITE. Any region flood-filled with a white or
+// near-white color becomes invisible on the page (e.g. a white rabbit's
+// body vanishes into the background).
+//
+// Therefore: NO palette entry may be white or near-white. If an object's
+// natural color is white (rabbit fur, sheep wool, swan feathers, cloud,
+// snow, daisy petals, panda body, etc.), SUBSTITUTE with a light tint that
+// is still recognizably "close to white" but visible on white paper:
+//   • White fur  → light grey [200,200,200], beige [230,220,200], or pink [255,200,200]
+//   • White feathers → cream [250,240,210] or light tan [235,225,200]
+//   • White clouds/snow → light blue [200,225,240] or lavender [220,225,240]
+//   • White stripes (zebra/skunk) → light grey [210,210,210]
+//
+// The sanitizer below enforces this at runtime — any palette (natural or
+// fallback) is passed through `sanitizePalette()` which replaces any
+// near-white entry with a safe tint. Source palettes should ALSO be fixed
+// to avoid relying solely on the sanitizer.
+// ─────────────────────────────────────────────────────────────────────────
+
+const WHITE_THRESHOLD = 230; // any RGB channel >= this in ALL 3 channels = near-white
+
+function isNearWhite(c: RGB, threshold = WHITE_THRESHOLD): boolean {
+  return c[0] >= threshold && c[1] >= threshold && c[2] >= threshold;
+}
+
+// Light-tint substitutions for white. Cycled deterministically so repeated
+// white entries in the same palette get variety (grey, beige, pink, blue…).
+const WHITE_SUBSTITUTES: RGB[] = [
+  [200, 200, 205],  // light grey (fur shadow)
+  [230, 218, 195],  // beige/cream (feathers)
+  [255, 200, 205],  // blush pink (inner ear, nose)
+  [205, 222, 238],  // pale blue (sky/snow tint)
+  [220, 210, 230],  // pale lavender
+  [235, 225, 200],  // light tan
+];
+
+/** Replace any white/near-white color in a palette with a visible light tint. */
+export function sanitizePalette(palette: Palette, seedName = ""): Palette {
+  let subIdx = 0;
+  // deterministic offset from the item name so the same item always gets
+  // the same substitute (not random per run)
+  if (seedName) {
+    subIdx = hashString(seedName) % WHITE_SUBSTITUTES.length;
+  }
+  return palette.map((c) => {
+    if (isNearWhite(c)) {
+      const sub = WHITE_SUBSTITUTES[subIdx % WHITE_SUBSTITUTES.length];
+      subIdx++;
+      return sub;
+    }
+    return c;
+  });
+}
+
 export function getPalette(item: string, category: string): Palette {
-  // 1. Natural palette wins if defined.
-  if (NATURAL_PALETTES[item]) return NATURAL_PALETTES[item];
+  // 1. Natural palette wins if defined — but ALWAYS sanitize (no white!).
+  if (NATURAL_PALETTES[item]) {
+    return sanitizePalette(NATURAL_PALETTES[item], item);
+  }
 
   // 2. Otherwise use the fallback palette with a deterministic offset
-  //    so each item gets unique-but-consistent colors.
+  //    so each item gets unique-but-consistent colors. Also sanitize.
   const offset = hashString(item) % FALLBACK_PALETTE.length;
   const rotated: Palette = [];
   for (let i = 0; i < FALLBACK_PALETTE.length; i++) {
     rotated.push(FALLBACK_PALETTE[(i + offset) % FALLBACK_PALETTE.length]);
   }
-  return rotated;
+  return sanitizePalette(rotated, item);
 }
 
 // ---------------------------------------------------------------------------

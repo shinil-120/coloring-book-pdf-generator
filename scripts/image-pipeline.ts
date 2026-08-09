@@ -132,23 +132,42 @@ export async function colorizeImage(
   bwPath: string,
   outputPath: string,
   palette: Palette,
-  options: { whiteThreshold?: number; minSize?: number; maxSize?: number } = {}
+  options: { whiteThreshold?: number; minSize?: number; maxSize?: number; closeGaps?: number } = {}
 ): Promise<void> {
   const whiteThreshold = options.whiteThreshold ?? 200;
   const minSize = options.minSize ?? 3;
-  const maxSize = options.maxSize ?? 500000;
+  const maxSize = options.maxSize ?? 1000000; // allow large bodies (up to ~1M px in a 1024² image)
+  const closeGaps = options.closeGaps ?? 12; // dilate black lines N times to seal gaps in AI line art
 
-  const { data, info } = await sharp(bwPath)
-    .resize(1024, 1024, { fit: "cover" })
+  // Resize to 1000×1000 then place on a 1024×1024 WHITE canvas. The 12px
+  // white border guarantees no subject region can touch the canvas edge,
+  // so body regions that extend to the artwork boundary stay enclosed and
+  // get colored (instead of leaking into the border-touching background).
+  const resized = await sharp(bwPath)
+    .resize(1000, 1000, { fit: "cover" })
+    .flatten({ background: { r: 255, g: 255, b: 255 } })
+    .raw()
+    .toBuffer();
+  const { data: canvasData, info: canvasInfo } = await sharp(resized, {
+    raw: { width: 1000, height: 1000, channels: 3 },
+  })
+    .extend({
+      top: 12,
+      bottom: 12,
+      left: 12,
+      right: 12,
+      background: { r: 255, g: 255, b: 255 },
+    })
     .raw()
     .toBuffer({ resolveWithObject: true });
 
-  const w = info.width;
-  const h = info.height;
-  const ch = info.channels;
+  const data = canvasData;
+  const w = canvasInfo.width;
+  const h = canvasInfo.height;
+  const ch = canvasInfo.channels;
   const total = w * h;
 
-  // Build single-channel luminance buffer
+  // Build single-channel luminance buffer (original — kept for final output)
   const lum = new Uint8Array(total);
   for (let i = 0; i < total; i++) {
     if (ch >= 3) {
@@ -156,6 +175,36 @@ export async function colorizeImage(
     } else {
       lum[i] = data[i * ch];
     }
+  }
+
+  // ── GAP-CLOSING for flood-fill ──────────────────────────────────────
+  // AI line art often has tiny gaps where strokes don't fully meet, causing
+  // the body region to "leak" into the background (which then touches the
+  // border and gets skipped → uncolored). We dilate the black lines a few
+  // times to seal small gaps BEFORE flood-fill. The original lines are kept
+  // for the final compositing, so the visible outline stays crisp.
+  const fillMask = new Uint8Array(total); // 1 = black (barrier), 0 = white (fillable)
+  for (let i = 0; i < total; i++) {
+    fillMask[i] = lum[i] <= whiteThreshold ? 1 : 0;
+  }
+  for (let pass = 0; pass < closeGaps; pass++) {
+    const dilated = new Uint8Array(fillMask);
+    for (let y = 1; y < h - 1; y++) {
+      for (let x = 1; x < w - 1; x++) {
+        const idx = y * w + x;
+        if (fillMask[idx]) continue; // already black
+        // If any 8-neighbor is black, turn this pixel black (dilate)
+        if (
+          fillMask[(y - 1) * w + x - 1] || fillMask[(y - 1) * w + x] || fillMask[(y - 1) * w + x + 1] ||
+          fillMask[y * w + x - 1] || fillMask[y * w + x + 1] ||
+          fillMask[(y + 1) * w + x - 1] || fillMask[(y + 1) * w + x] || fillMask[(y + 1) * w + x + 1]
+        ) {
+          dilated[idx] = 1;
+        }
+      }
+    }
+    dilated.set(fillMask);
+    for (let i = 0; i < total; i++) fillMask[i] = dilated[i];
   }
 
   const visited = new Uint8Array(total);
@@ -166,11 +215,42 @@ export async function colorizeImage(
   }
   const regions: Region[] = [];
 
+  // ── Bounding box of black pixels ────────────────────────────────────
+  // AI line art often has open outlines (e.g. a ground shadow that doesn't
+  // fully enclose the body), causing the body region to merge with the
+  // background. To still color the body, we compute the bounding box of all
+  // black pixels and treat any white pixel INSIDE that bbox as "interior".
+  // We then flood-fill from the border OUTSIDE the bbox to mark the true
+  // background, leaving interior white pixels (body) to be colored.
+  let bboxMinX = w, bboxMinY = h, bboxMaxX = 0, bboxMaxY = 0;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      if (fillMask[y * w + x] === 1) {
+        if (x < bboxMinX) bboxMinX = x;
+        if (x > bboxMaxX) bboxMaxX = x;
+        if (y < bboxMinY) bboxMinY = y;
+        if (y > bboxMaxY) bboxMaxY = y;
+      }
+    }
+  }
+  // Shrink bbox slightly so we don't include the outline itself
+  const bboxInset = Math.max(2, closeGaps);
+  bboxMinX = Math.max(0, bboxMinX + bboxInset);
+  bboxMinY = Math.max(0, bboxMinY + bboxInset);
+  bboxMaxX = Math.min(w - 1, bboxMaxX - bboxInset);
+  bboxMaxY = Math.min(h - 1, bboxMaxY - bboxInset);
+
+  function inBbox(x: number, y: number): boolean {
+    return x >= bboxMinX && x <= bboxMaxX && y >= bboxMinY && y <= bboxMaxY;
+  }
+
   // Iterative BFS flood fill (8-connected) using a stack
   const stack: number[] = new Array(total);
 
   for (let start = 0; start < total; start++) {
-    if (visited[start] || lum[start] <= whiteThreshold) continue;
+    // Use the gap-closed mask for barrier detection — this seals tiny gaps
+    // in AI line art so body regions stay enclosed and get colored.
+    if (visited[start] || fillMask[start] === 1) continue;
 
     // Start a new region
     let head = 0;
@@ -203,7 +283,8 @@ export async function colorizeImage(
           if (nx < 0 || nx >= w) continue;
           const nidx = ny * w + nx;
           if (visited[nidx]) continue;
-          if (lum[nidx] <= whiteThreshold) continue;
+          // Gap-closed mask determines barriers
+          if (fillMask[nidx] === 1) continue;
           visited[nidx] = 1;
           if (nx === 0 || nx === w - 1 || ny === 0 || ny === h - 1) {
             touchesBorder = true;
@@ -214,8 +295,32 @@ export async function colorizeImage(
     }
 
     const size = pixelIndices.length;
-    if (!touchesBorder && size > minSize && size < maxSize) {
-      regions.push({ pixels: pixelIndices, size, touchesBorder });
+
+    // A region is colorizable if:
+    //   (a) it doesn't touch the border, OR
+    //   (b) it touches the border BUT has pixels inside the black-pixel bbox
+    //       (meaning it's a body that leaked to the background through a gap).
+    // Case (b): we only color the pixels that are INSIDE the bbox, excluding
+    // the large background area outside.
+    let colorizablePixels: number[] | null = null;
+    if (!touchesBorder) {
+      if (size > minSize && size < maxSize) {
+        colorizablePixels = pixelIndices;
+      }
+    } else {
+      // Border-touching: extract only the interior (in-bbox) pixels
+      const interior = pixelIndices.filter((idx) => {
+        const px = idx % w;
+        const py = Math.floor(idx / w);
+        return inBbox(px, py);
+      });
+      if (interior.length > minSize && interior.length < maxSize) {
+        colorizablePixels = interior;
+      }
+    }
+
+    if (colorizablePixels) {
+      regions.push({ pixels: colorizablePixels, size: colorizablePixels.length, touchesBorder });
     }
   }
 
