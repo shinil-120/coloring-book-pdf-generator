@@ -40,6 +40,8 @@ export async function POST(req: NextRequest) {
       ? [body.bgGradient[0], body.bgGradient[1]]
       : ["#FF6B9D", "#FBA74D"];
     const spineColor: string = body?.spineColor ?? bgGradient[0];
+    const designStyle: string = body?.designStyle ?? "classic";
+    const thumbnailUrls: string[] = Array.isArray(body?.thumbnailUrls) ? body.thumbnailUrls : [];
 
     // Spine width in points
     const spineW = pageCount * SPINE_PER_PAGE;
@@ -115,36 +117,132 @@ export async function POST(req: NextRequest) {
     // ── Front cover (right panel) ────────────────────────────────────
     const frontX = PAGE_W + spineW;
     const white = rgb(1, 1, 1);
-    const whiteOpaque = rgb(1, 1, 1);
 
-    // Decorative bars
-    page.drawRectangle({
-      x: frontX + 50,
-      y: COVER_H - COVER_H * 0.28 - 3,
-      width: PAGE_W - 100,
-      height: 3,
-      color: rgb(1, 1, 1),
-      opacity: 0.25,
-    });
-    page.drawRectangle({
-      x: frontX + 50,
-      y: COVER_H - COVER_H * 0.78 - 3,
-      width: PAGE_W - 100,
-      height: 3,
-      color: rgb(1, 1, 1),
-      opacity: 0.25,
-    });
-
-    // Title (centered)
-    drawCenteredText(page, helveticaBold, title, 42, frontX + 50, COVER_H - COVER_H * 0.35 - 42, PAGE_W - 100, white);
-
-    // Subtitle
-    if (subtitle) {
-      drawCenteredText(page, helvetica, subtitle, 18, frontX + 50, COVER_H - COVER_H * 0.5 - 18, PAGE_W - 100, whiteOpaque);
+    // Embed thumbnail images (if provided) for design styles
+    const embeddedThumbs: { jpg: Awaited<ReturnType<typeof doc.embedJpg>>; w: number; h: number }[] = [];
+    if (thumbnailUrls.length > 0) {
+      for (const url of thumbnailUrls.slice(0, 6)) {
+        try {
+          const imgRes = await fetch(url + (url.includes("?") ? "&" : "?") + "t=" + Date.now());
+          if (imgRes.ok) {
+            const imgBuf = Buffer.from(await imgRes.arrayBuffer());
+            const jpg = await doc.embedJpg(imgBuf);
+            embeddedThumbs.push({ jpg, w: jpg.width, h: jpg.height });
+          }
+        } catch {
+          // skip failed images
+        }
+      }
     }
 
-    // Author (bottom)
-    drawCenteredText(page, helveticaBold, author, 20, frontX + 50, COVER_H - COVER_H * 0.82 - 20, PAGE_W - 100, white);
+    // ── Design Style: "classic" (original layout) ─────────────────────
+    if (designStyle === "classic") {
+      // Decorative bars
+      page.drawRectangle({ x: frontX + 50, y: COVER_H - COVER_H * 0.28 - 3, width: PAGE_W - 100, height: 3, color: rgb(1, 1, 1), opacity: 0.25 });
+      page.drawRectangle({ x: frontX + 50, y: COVER_H - COVER_H * 0.78 - 3, width: PAGE_W - 100, height: 3, color: rgb(1, 1, 1), opacity: 0.25 });
+
+      drawCenteredText(page, helveticaBold, title, 42, frontX + 50, COVER_H - COVER_H * 0.35 - 42, PAGE_W - 100, white);
+      if (subtitle) drawCenteredText(page, helvetica, subtitle, 18, frontX + 50, COVER_H - COVER_H * 0.5 - 18, PAGE_W - 100, white);
+      drawCenteredText(page, helveticaBold, author, 20, frontX + 50, COVER_H - COVER_H * 0.82 - 20, PAGE_W - 100, white);
+    }
+
+    // ── Design Style: "gallery" (thumbnails grid + title) ─────────────
+    else if (designStyle === "gallery" && embeddedThumbs.length > 0) {
+      // Title at top
+      drawCenteredText(page, helveticaBold, title, 36, frontX + 40, COVER_H - 80, PAGE_W - 80, white);
+      if (subtitle) drawCenteredText(page, helvetica, subtitle, 14, frontX + 40, COVER_H - 120, PAGE_W - 80, white);
+
+      // Thumbnail grid: 3 columns × 2 rows
+      const cols = 3;
+      const rows = Math.ceil(embeddedThumbs.length / cols);
+      const gridTop = COVER_H - 150;
+      const gridBottom = 120;
+      const gridH = gridTop - gridBottom;
+      const cellW = (PAGE_W - 100) / cols;
+      const cellH = gridH / Math.max(rows, 1);
+      const thumbSize = Math.min(cellW - 15, cellH - 15);
+
+      embeddedThumbs.forEach((thumb, i) => {
+        const col = i % cols;
+        const row = Math.floor(i / cols);
+        const cx = frontX + 50 + col * cellW + (cellW - thumbSize) / 2;
+        const cy = gridTop - (row + 1) * cellH + (cellH - thumbSize) / 2;
+        page.drawImage(thumb.jpg, {
+          x: cx, y: cy,
+          width: thumbSize, height: thumbSize,
+          opacity: 0.85,
+        });
+      });
+
+      // Author at bottom
+      drawCenteredText(page, helveticaBold, author, 18, frontX + 40, 60, PAGE_W - 80, white);
+    }
+
+    // ── Design Style: "collage" (overlapping thumbnails + title) ──────
+    else if (designStyle === "collage" && embeddedThumbs.length > 0) {
+      // Scattered thumbnails (overlapping, semi-transparent)
+      const positions = [
+        { x: 0.15, y: 0.55, s: 0.22 },
+        { x: 0.55, y: 0.60, s: 0.20 },
+        { x: 0.30, y: 0.35, s: 0.18 },
+        { x: 0.65, y: 0.35, s: 0.16 },
+        { x: 0.20, y: 0.15, s: 0.15 },
+        { x: 0.55, y: 0.12, s: 0.14 },
+      ];
+      embeddedThumbs.forEach((thumb, i) => {
+        if (i >= positions.length) return;
+        const p = positions[i];
+        const sz = PAGE_W * p.s;
+        const cx = frontX + PAGE_W * p.x;
+        const cy = COVER_H * p.y;
+        page.drawImage(thumb.jpg, {
+          x: cx, y: cy,
+          width: sz, height: sz,
+          opacity: 0.7,
+        });
+      });
+
+      // Title overlay (with semi-transparent background)
+      page.drawRectangle({ x: frontX + 30, y: COVER_H * 0.42, width: PAGE_W - 60, height: 90, color: rgb(0, 0, 0), opacity: 0.3 });
+      drawCenteredText(page, helveticaBold, title, 38, frontX + 40, COVER_H * 0.42 + 55, PAGE_W - 80, white);
+      drawCenteredText(page, helveticaBold, author, 16, frontX + 40, COVER_H * 0.42 + 25, PAGE_W - 80, white);
+    }
+
+    // ── Design Style: "banner" (large thumbnail strip + title) ────────
+    else if (designStyle === "banner" && embeddedThumbs.length > 0) {
+      // Large title at top
+      drawCenteredText(page, helveticaBold, title, 44, frontX + 40, COVER_H - 70, PAGE_W - 80, white);
+      if (subtitle) drawCenteredText(page, helvetica, subtitle, 16, frontX + 40, COVER_H - 110, PAGE_W - 80, white);
+
+      // Single row of thumbnails (horizontal strip)
+      const stripY = COVER_H * 0.30;
+      const stripH = COVER_H * 0.40;
+      const count = embeddedThumbs.length;
+      const thumbW = (PAGE_W - 80) / count;
+      const thumbSize = Math.min(thumbW - 8, stripH);
+
+      embeddedThumbs.forEach((thumb, i) => {
+        const cx = frontX + 40 + i * thumbW + (thumbW - thumbSize) / 2;
+        const cy = stripY;
+        page.drawImage(thumb.jpg, {
+          x: cx, y: cy,
+          width: thumbSize, height: thumbSize,
+          opacity: 0.9,
+        });
+      });
+
+      // Author at bottom
+      drawCenteredText(page, helveticaBold, author, 20, frontX + 40, 60, PAGE_W - 80, white);
+    }
+
+    // Fallback: classic layout (if no thumbnails for gallery/collage/banner)
+    else {
+      page.drawRectangle({ x: frontX + 50, y: COVER_H - COVER_H * 0.28 - 3, width: PAGE_W - 100, height: 3, color: rgb(1, 1, 1), opacity: 0.25 });
+      page.drawRectangle({ x: frontX + 50, y: COVER_H - COVER_H * 0.78 - 3, width: PAGE_W - 100, height: 3, color: rgb(1, 1, 1), opacity: 0.25 });
+      drawCenteredText(page, helveticaBold, title, 42, frontX + 50, COVER_H - COVER_H * 0.35 - 42, PAGE_W - 100, white);
+      if (subtitle) drawCenteredText(page, helvetica, subtitle, 18, frontX + 50, COVER_H - COVER_H * 0.5 - 18, PAGE_W - 100, white);
+      drawCenteredText(page, helveticaBold, author, 20, frontX + 50, COVER_H - COVER_H * 0.82 - 20, PAGE_W - 100, white);
+    }
 
     // ── Back cover (left panel) ──────────────────────────────────────
     const descText = `A fun coloring book with ${pageCount} pages of delightful illustrations. Perfect for kids and adults alike. Each page features clean line art ready to color.`;

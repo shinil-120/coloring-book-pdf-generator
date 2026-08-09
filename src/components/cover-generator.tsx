@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import {
   ArrowLeft,
   BookOpen,
@@ -11,6 +11,10 @@ import {
   Wand2,
   FileText,
   Ruler,
+  LayoutGrid,
+  Images,
+  Rows3,
+  Type,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -30,6 +34,7 @@ interface BookMeta {
   timestamp: string;
   readableTime: string;
   description: string;
+  items?: string[];
 }
 
 interface CoverResult {
@@ -41,7 +46,22 @@ interface CoverResult {
   fileName: string;
 }
 
-// Preset gradient themes
+interface PageData {
+  index: number;
+  pageNumber: number;
+  label: string;
+  thumbnail: string;
+}
+
+// Design styles
+const DESIGN_STYLES = [
+  { id: "classic", name: "Classic", icon: Type, desc: "Title-focused, clean" },
+  { id: "gallery", name: "Gallery", icon: LayoutGrid, desc: "3×2 thumbnail grid" },
+  { id: "collage", name: "Collage", icon: Images, desc: "Overlapping images" },
+  { id: "banner", name: "Banner", icon: Rows3, desc: "Horizontal strip" },
+];
+
+// Color themes
 const THEMES = [
   { name: "Sunset", colors: ["#FF6B9D", "#FBA74D"] as [string, string] },
   { name: "Ocean", colors: ["#4ECDC4", "#3B82F6"] as [string, string] },
@@ -60,23 +80,55 @@ export function CoverGenerator({
   books: BookMeta[];
   onBack: () => void;
 }) {
-  const [title, setTitle] = useState("My Coloring Book");
+  const [selectedSlug, setSelectedSlug] = useState<string>(books[0]?.slug ?? "");
+  const [title, setTitle] = useState("");
   const [author, setAuthor] = useState("Coloring Book Studio");
-  const [subtitle, setSubtitle] = useState("30 fun pages to color");
-  const [selectedSlug, setSelectedSlug] = useState<string>(
-    books[0]?.slug ?? ""
-  );
+  const [subtitle, setSubtitle] = useState("");
   const [themeIdx, setThemeIdx] = useState(0);
+  const [designStyle, setDesignStyle] = useState("gallery");
   const [generating, setGenerating] = useState(false);
   const [result, setResult] = useState<CoverResult | null>(null);
+  const [bookPages, setBookPages] = useState<PageData[]>([]);
+  const [loadingPages, setLoadingPages] = useState(false);
 
   const selectedBook = books.find((b) => b.slug === selectedSlug);
   const pageCount = selectedBook?.pages ?? 100;
   const theme = THEMES[themeIdx];
 
-  // Spine width estimate (for display)
+  // Auto-set title when a book is selected
+  useEffect(() => {
+    if (selectedBook) {
+      const bookTitle = selectedBook.name.replace(" Coloring Book", "");
+      setTitle(bookTitle + " Coloring Book");
+      setSubtitle(`${pageCount} fun pages to color`);
+    }
+  }, [selectedSlug]); // eslint-disable-next-line react-hooks/exhaustive-deps
+
+  // Fetch page thumbnails when book is selected (for design preview)
+  useEffect(() => {
+    if (!selectedSlug) return;
+    setLoadingPages(true);
+    setBookPages([]);
+    fetch("/api/book-pages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ slug: selectedSlug }),
+    })
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success) setBookPages(data.pages);
+      })
+      .catch(() => {})
+      .finally(() => setLoadingPages(false));
+  }, [selectedSlug]);
+
   const spineInches = (pageCount * 0.002252).toFixed(3);
   const coverWidthInches = (8.5 + pageCount * 0.002252 + 8.5).toFixed(2);
+
+  // Get up to 6 thumbnail URLs for the cover design
+  const thumbnailUrls = useMemo(() => {
+    return bookPages.slice(0, 6).map((p) => p.thumbnail);
+  }, [bookPages]);
 
   const handleGenerate = useCallback(async () => {
     if (!title.trim() || !author.trim()) {
@@ -96,6 +148,8 @@ export function CoverGenerator({
           pageCount,
           bgGradient: theme.colors,
           spineColor: theme.colors[0],
+          designStyle,
+          thumbnailUrls,
         }),
       });
       if (!res.ok) {
@@ -112,7 +166,7 @@ export function CoverGenerator({
         fileName: data.fileName,
       });
 
-      // Save cover to Blob + Turso so it appears in the book list
+      // Save cover to Blob + Turso
       try {
         await fetch("/api/save-cover", {
           method: "POST",
@@ -125,12 +179,10 @@ export function CoverGenerator({
             fileName: data.fileName,
           }),
         });
-      } catch {
-        // non-fatal — cover is still downloadable
-      }
+      } catch {}
 
       toast.success("Cover generated!", {
-        description: `${pageCount} pages · ${coverWidthInches}" wide · Added to book list`,
+        description: `${designStyle} style · Added to Merge Books`,
       });
     } catch (e) {
       toast.error("Cover generation failed", {
@@ -139,7 +191,7 @@ export function CoverGenerator({
     } finally {
       setGenerating(false);
     }
-  }, [title, author, subtitle, pageCount, theme, coverWidthInches]);
+  }, [title, author, subtitle, pageCount, theme, designStyle, thumbnailUrls]);
 
   const handleDownload = useCallback(() => {
     if (!result) return;
@@ -174,33 +226,21 @@ export function CoverGenerator({
                 KDP Cover Ready
               </h2>
               <p className="text-sm font-medium text-stone-500">
-                Full paperback cover with spine
+                {designStyle} style · Added to Merge Books
               </p>
             </div>
             <div className="grid w-full grid-cols-3 gap-2">
               <div className="rounded-xl border border-stone-200 bg-stone-50 p-3">
-                <div className="text-xl font-extrabold text-stone-800">
-                  {result.pageCount}
-                </div>
-                <div className="text-[10px] font-bold uppercase tracking-wide text-stone-500">
-                  Pages
-                </div>
+                <div className="text-xl font-extrabold text-stone-800">{result.pageCount}</div>
+                <div className="text-[10px] font-bold uppercase tracking-wide text-stone-500">Pages</div>
               </div>
               <div className="rounded-xl border border-stone-200 bg-stone-50 p-3">
-                <div className="text-xl font-extrabold text-stone-800">
-                  {spineInches}"
-                </div>
-                <div className="text-[10px] font-bold uppercase tracking-wide text-stone-500">
-                  Spine
-                </div>
+                <div className="text-xl font-extrabold text-stone-800">{spineInches}"</div>
+                <div className="text-[10px] font-bold uppercase tracking-wide text-stone-500">Spine</div>
               </div>
               <div className="rounded-xl border border-stone-200 bg-stone-50 p-3">
-                <div className="text-xl font-extrabold text-stone-800">
-                  {coverWidthInches}"
-                </div>
-                <div className="text-[10px] font-bold uppercase tracking-wide text-stone-500">
-                  Width
-                </div>
+                <div className="text-xl font-extrabold text-stone-800">{coverWidthInches}"</div>
+                <div className="text-[10px] font-bold uppercase tracking-wide text-stone-500">Width</div>
               </div>
             </div>
             <div className="w-full rounded-xl border border-indigo-100 bg-indigo-50/60 px-4 py-2.5 text-xs font-medium text-indigo-700">
@@ -209,18 +249,11 @@ export function CoverGenerator({
             <div className="w-full truncate rounded-lg bg-stone-100 px-3 py-2 font-mono text-xs text-stone-600">
               {result.fileName}
             </div>
-            <Button
-              onClick={handleDownload}
-              className="h-12 w-full gap-2 rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 text-sm font-bold text-white shadow-md shadow-indigo-200 transition-all hover:from-indigo-600 hover:to-violet-600 hover:shadow-lg hover:shadow-indigo-300"
-            >
+            <Button onClick={handleDownload} className="h-12 w-full gap-2 rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 text-sm font-bold text-white shadow-md shadow-indigo-200 transition-all hover:from-indigo-600 hover:to-violet-600 hover:shadow-lg hover:shadow-indigo-300">
               <Download className="h-4.5 w-4.5" />
               Download Cover PDF
             </Button>
-            <Button
-              onClick={() => setResult(null)}
-              variant="outline"
-              className="h-10 w-full gap-2 rounded-full border-stone-200 text-xs font-bold text-stone-600 hover:bg-stone-50"
-            >
+            <Button onClick={() => setResult(null)} variant="outline" className="h-10 w-full gap-2 rounded-full border-stone-200 text-xs font-bold text-stone-600 hover:bg-stone-50">
               <ArrowLeft className="h-3.5 w-3.5" />
               Back to Cover Builder
             </Button>
@@ -236,12 +269,7 @@ export function CoverGenerator({
       {/* Top bar */}
       <div className="flex flex-col gap-3 rounded-2xl border border-indigo-200 bg-white p-4 shadow-sm lg:flex-row lg:items-center lg:justify-between">
         <div className="flex items-center gap-3">
-          <Button
-            onClick={onBack}
-            variant="ghost"
-            size="sm"
-            className="gap-1.5 rounded-full text-stone-500 hover:bg-stone-100"
-          >
+          <Button onClick={onBack} variant="ghost" size="sm" className="gap-1.5 rounded-full text-stone-500 hover:bg-stone-100">
             <ArrowLeft className="h-4 w-4" />
             Back
           </Button>
@@ -252,28 +280,19 @@ export function CoverGenerator({
               KDP Cover Generator
             </div>
             <div className="text-xs font-medium text-stone-500">
-              Create a full paperback cover (back + spine + front)
+              Pick a book, choose a design, generate a cover
             </div>
           </div>
         </div>
       </div>
 
-      {/* Hint */}
-      <div className="flex items-center gap-2 rounded-xl border border-indigo-100 bg-indigo-50/60 px-4 py-2.5 text-xs font-medium text-indigo-700">
-        <Wand2 className="h-3.5 w-3.5 shrink-0" />
-        <span>
-          Enter your book details, pick a color theme, and generate a
-          KDP-ready cover PDF with automatic spine sizing.
-        </span>
-      </div>
-
       <div className="grid gap-5 lg:grid-cols-[1fr_360px]">
-        {/* Form */}
+        {/* Left: Form */}
         <div className="space-y-4">
           {/* Book selection */}
           <div className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
             <Label className="mb-2 block text-xs font-bold uppercase tracking-wide text-stone-500">
-              Source Book (determines page count)
+              1. Pick a Coloring Book
             </Label>
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
               {books.map((book) => {
@@ -284,9 +303,7 @@ export function CoverGenerator({
                     key={book.slug}
                     onClick={() => setSelectedSlug(book.slug)}
                     className={`group relative flex flex-col gap-1 overflow-hidden rounded-xl border-2 bg-white p-2.5 text-left transition-all ${
-                      isSelected
-                        ? "border-indigo-400 ring-2 ring-indigo-200"
-                        : "border-stone-200 hover:border-stone-300"
+                      isSelected ? "border-indigo-400 ring-2 ring-indigo-200" : "border-stone-200 hover:border-stone-300"
                     }`}
                   >
                     <div className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${theme.gradient}`} />
@@ -296,61 +313,45 @@ export function CoverGenerator({
                         {book.name.replace(" Coloring Book", "")}
                       </span>
                     </div>
-                    <span className="text-[10px] font-medium text-stone-500">
-                      {book.pages} pages
-                    </span>
+                    <span className="text-[10px] font-medium text-stone-500">{book.pages} pages</span>
                   </button>
                 );
               })}
             </div>
           </div>
 
-          {/* Text fields */}
+          {/* Design style selection */}
           <div className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
-            <div className="space-y-3">
-              <div>
-                <Label htmlFor="cover-title" className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-stone-500">
-                  Title
-                </Label>
-                <Input
-                  id="cover-title"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="My Coloring Book"
-                  className="h-10 rounded-xl border-stone-200 bg-stone-50 text-sm font-bold text-stone-800 focus:border-indigo-300 focus:bg-white"
-                />
-              </div>
-              <div>
-                <Label htmlFor="cover-subtitle" className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-stone-500">
-                  Subtitle (optional)
-                </Label>
-                <Input
-                  id="cover-subtitle"
-                  value={subtitle}
-                  onChange={(e) => setSubtitle(e.target.value)}
-                  placeholder="30 fun pages to color"
-                  className="h-10 rounded-xl border-stone-200 bg-stone-50 text-sm font-medium text-stone-700 focus:border-indigo-300 focus:bg-white"
-                />
-              </div>
-              <div>
-                <Label htmlFor="cover-author" className="mb-1.5 block text-xs font-bold uppercase tracking-wide text-stone-500">
-                  Author Name
-                </Label>
-                <Input
-                  id="cover-author"
-                  value={author}
-                  onChange={(e) => setAuthor(e.target.value)}
-                  placeholder="Your Name"
-                  className="h-10 rounded-xl border-stone-200 bg-stone-50 text-sm font-medium text-stone-700 focus:border-indigo-300 focus:bg-white"
-                />
-              </div>
+            <Label className="mb-2 block text-xs font-bold uppercase tracking-wide text-stone-500">
+              2. Choose Design Style
+            </Label>
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              {DESIGN_STYLES.map((style) => {
+                const Icon = style.icon;
+                const isSelected = designStyle === style.id;
+                return (
+                  <button
+                    key={style.id}
+                    onClick={() => setDesignStyle(style.id)}
+                    className={`flex flex-col items-center gap-1.5 rounded-xl border-2 p-3 transition-all ${
+                      isSelected ? "border-indigo-400 bg-indigo-50/50 ring-2 ring-indigo-200" : "border-stone-200 hover:border-stone-300"
+                    }`}
+                  >
+                    <Icon className={`h-6 w-6 ${isSelected ? "text-indigo-500" : "text-stone-400"}`} />
+                    <div className={`text-xs font-bold ${isSelected ? "text-indigo-700" : "text-stone-600"}`}>
+                      {style.name}
+                    </div>
+                    <div className="text-[9px] text-stone-400 text-center">{style.desc}</div>
+                  </button>
+                );
+              })}
             </div>
           </div>
 
           {/* Color theme */}
           <div className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
             <Label className="mb-2 block text-xs font-bold uppercase tracking-wide text-stone-500">
-              Color Theme
+              3. Color Theme
             </Label>
             <div className="grid grid-cols-4 gap-2">
               {THEMES.map((t, i) => (
@@ -358,21 +359,35 @@ export function CoverGenerator({
                   key={t.name}
                   onClick={() => setThemeIdx(i)}
                   className={`group relative overflow-hidden rounded-xl border-2 p-1 transition-all ${
-                    themeIdx === i
-                      ? "border-indigo-400 ring-2 ring-indigo-200"
-                      : "border-stone-200 hover:border-stone-300"
+                    themeIdx === i ? "border-indigo-400 ring-2 ring-indigo-200" : "border-stone-200 hover:border-stone-300"
                   }`}
                   title={t.name}
                 >
-                  <div
-                    className="h-10 w-full rounded-lg"
-                    style={{ background: `linear-gradient(135deg, ${t.colors[0]}, ${t.colors[1]})` }}
-                  />
-                  <div className="mt-1 text-center text-[9px] font-bold text-stone-600">
-                    {t.name}
-                  </div>
+                  <div className="h-10 w-full rounded-lg" style={{ background: `linear-gradient(135deg, ${t.colors[0]}, ${t.colors[1]})` }} />
+                  <div className="mt-1 text-center text-[9px] font-bold text-stone-600">{t.name}</div>
                 </button>
               ))}
+            </div>
+          </div>
+
+          {/* Text fields */}
+          <div className="rounded-2xl border border-stone-200 bg-white p-4 shadow-sm">
+            <Label className="mb-2 block text-xs font-bold uppercase tracking-wide text-stone-500">
+              4. Cover Text
+            </Label>
+            <div className="space-y-3">
+              <div>
+                <Label htmlFor="cover-title" className="mb-1 block text-[11px] font-bold text-stone-600">Title</Label>
+                <Input id="cover-title" value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Book title" className="h-9 rounded-xl border-stone-200 bg-stone-50 text-sm font-bold text-stone-800 focus:border-indigo-300 focus:bg-white" />
+              </div>
+              <div>
+                <Label htmlFor="cover-subtitle" className="mb-1 block text-[11px] font-bold text-stone-600">Subtitle</Label>
+                <Input id="cover-subtitle" value={subtitle} onChange={(e) => setSubtitle(e.target.value)} placeholder="30 fun pages to color" className="h-9 rounded-xl border-stone-200 bg-stone-50 text-sm font-medium text-stone-700 focus:border-indigo-300 focus:bg-white" />
+              </div>
+              <div>
+                <Label htmlFor="cover-author" className="mb-1 block text-[11px] font-bold text-stone-600">Author</Label>
+                <Input id="cover-author" value={author} onChange={(e) => setAuthor(e.target.value)} placeholder="Your name" className="h-9 rounded-xl border-stone-200 bg-stone-50 text-sm font-medium text-stone-700 focus:border-indigo-300 focus:bg-white" />
+              </div>
             </div>
           </div>
         </div>
@@ -384,12 +399,10 @@ export function CoverGenerator({
               <div className="flex h-8 w-8 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-violet-500 text-white shadow-sm">
                 <Palette className="h-4 w-4" />
               </div>
-              <h3 className="text-sm font-extrabold text-stone-800">
-                Live Preview
-              </h3>
+              <h3 className="text-sm font-extrabold text-stone-800">Live Preview</h3>
             </div>
 
-            {/* Cover preview (scaled down) */}
+            {/* Cover preview */}
             <div className="mb-3 overflow-hidden rounded-xl border border-stone-200 bg-stone-50 p-3">
               <div
                 className="relative mx-auto flex overflow-hidden rounded-lg shadow-lg"
@@ -400,36 +413,36 @@ export function CoverGenerator({
                   background: `linear-gradient(180deg, ${theme.colors[0]}, ${theme.colors[1]})`,
                 }}
               >
-                {/* Back cover (left) */}
+                {/* Back cover */}
                 <div className="flex h-full flex-1 items-end justify-center p-2">
-                  <span className="text-[7px] font-semibold text-white/70">
-                    Back
-                  </span>
+                  <span className="text-[7px] font-semibold text-white/70">Back</span>
                 </div>
-                {/* Spine (middle) */}
-                <div
-                  className="h-full shrink-0"
-                  style={{
-                    width: `${(pageCount * 0.002252 / (8.5 + pageCount * 0.002252 + 8.5)) * 100}%`,
-                    minWidth: "3px",
-                    background: "rgba(0,0,0,0.2)",
-                  }}
-                />
-                {/* Front cover (right) */}
+                {/* Spine */}
+                <div className="h-full shrink-0" style={{ width: `${(pageCount * 0.002252 / (8.5 + pageCount * 0.002252 + 8.5)) * 100}%`, minWidth: "3px", background: "rgba(0,0,0,0.2)" }} />
+                {/* Front cover — design-specific preview */}
                 <div className="flex h-full flex-1 flex-col items-center justify-center gap-1 p-2">
-                  <div className="h-px w-3/4 bg-white/30" />
-                  <span className="text-center text-[8px] font-extrabold leading-tight text-white drop-shadow">
-                    {title || "Title"}
-                  </span>
-                  {subtitle && (
-                    <span className="text-center text-[6px] text-white/80">
-                      {subtitle}
-                    </span>
+                  {designStyle !== "classic" && bookPages.length > 0 ? (
+                    <>
+                      {/* Thumbnail grid preview */}
+                      <div className="grid grid-cols-3 gap-0.5 w-full mb-1">
+                        {bookPages.slice(0, 6).map((p, i) => (
+                          <div key={i} className="aspect-square overflow-hidden rounded-sm">
+                            <img src={p.thumbnail} alt="" className="h-full w-full object-cover opacity-80" loading="lazy" />
+                          </div>
+                        ))}
+                      </div>
+                      <span className="text-center text-[7px] font-extrabold leading-tight text-white drop-shadow">{title || "Title"}</span>
+                      {subtitle && <span className="text-center text-[5px] text-white/80">{subtitle}</span>}
+                    </>
+                  ) : (
+                    <>
+                      <div className="h-px w-3/4 bg-white/30" />
+                      <span className="text-center text-[8px] font-extrabold leading-tight text-white drop-shadow">{title || "Title"}</span>
+                      {subtitle && <span className="text-center text-[6px] text-white/80">{subtitle}</span>}
+                      <div className="h-px w-3/4 bg-white/30" />
+                      <span className="mt-1 text-[6px] font-bold text-white/90">{author || "Author"}</span>
+                    </>
                   )}
-                  <div className="h-px w-3/4 bg-white/30" />
-                  <span className="mt-1 text-[6px] font-bold text-white/90">
-                    {author || "Author"}
-                  </span>
                 </div>
               </div>
             </div>
@@ -437,30 +450,29 @@ export function CoverGenerator({
             {/* Specs */}
             <div className="mb-3 space-y-1.5 rounded-xl bg-stone-50 p-3">
               <div className="flex items-center justify-between text-[11px]">
-                <span className="flex items-center gap-1 font-semibold text-stone-500">
-                  <FileText className="h-3 w-3" /> Pages
-                </span>
+                <span className="flex items-center gap-1 font-semibold text-stone-500"><FileText className="h-3 w-3" /> Pages</span>
                 <span className="font-bold text-stone-700">{pageCount}</span>
               </div>
               <div className="flex items-center justify-between text-[11px]">
-                <span className="flex items-center gap-1 font-semibold text-stone-500">
-                  <Ruler className="h-3 w-3" /> Spine
-                </span>
+                <span className="flex items-center gap-1 font-semibold text-stone-500"><Ruler className="h-3 w-3" /> Spine</span>
                 <span className="font-bold text-stone-700">{spineInches}"</span>
               </div>
               <div className="flex items-center justify-between text-[11px]">
-                <span className="flex items-center gap-1 font-semibold text-stone-500">
-                  <Ruler className="h-3 w-3" /> Cover width
-                </span>
+                <span className="flex items-center gap-1 font-semibold text-stone-500"><Ruler className="h-3 w-3" /> Width</span>
                 <span className="font-bold text-stone-700">{coverWidthInches}"</span>
               </div>
               <div className="flex items-center justify-between text-[11px]">
-                <span className="flex items-center gap-1 font-semibold text-stone-500">
-                  <Ruler className="h-3 w-3" /> Height
-                </span>
-                <span className="font-bold text-stone-700">11.25"</span>
+                <span className="flex items-center gap-1 font-semibold text-stone-500"><LayoutGrid className="h-3 w-3" /> Style</span>
+                <span className="font-bold text-stone-700 capitalize">{designStyle}</span>
               </div>
             </div>
+
+            {loadingPages && (
+              <div className="mb-3 flex items-center justify-center gap-2 text-xs text-stone-400">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                Loading page thumbnails...
+              </div>
+            )}
 
             <Button
               onClick={handleGenerate}
@@ -468,15 +480,9 @@ export function CoverGenerator({
               className="h-11 w-full gap-2 rounded-full bg-gradient-to-r from-indigo-500 to-violet-500 text-sm font-bold text-white shadow-md shadow-indigo-200 transition-all hover:from-indigo-600 hover:to-violet-600 hover:shadow-lg hover:shadow-indigo-300 disabled:opacity-60"
             >
               {generating ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  Generating…
-                </>
+                <><Loader2 className="h-4 w-4 animate-spin" /> Generating…</>
               ) : (
-                <>
-                  <BookOpen className="h-4 w-4" />
-                  Generate Cover PDF
-                </>
+                <><BookOpen className="h-4 w-4" /> Generate Cover PDF</>
               )}
             </Button>
           </div>
