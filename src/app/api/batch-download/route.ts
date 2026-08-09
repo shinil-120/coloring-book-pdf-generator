@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import JSZip from "jszip";
+import { listBooks, type BookMeta } from "@/lib/turso";
 import fs from "fs";
 import path from "path";
 
@@ -8,10 +9,10 @@ export const dynamic = "force-dynamic";
 
 /**
  * POST /api/batch-download
- * Body: { slugs: string[] }  e.g. ["Pets", "Dinosaurs"]
+ * Body: { slugs: string[] }
  *
  * Returns a ZIP archive containing all the requested coloring book PDFs.
- * The response is a binary zip file (application/zip).
+ * Fetches PDFs from Vercel Blob (production) or local filesystem (dev).
  */
 export async function POST(req: NextRequest) {
   try {
@@ -25,19 +26,17 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const projectRoot = process.cwd();
-    const downloadsDir = path.join(projectRoot, "public", "downloads");
-
-    // Load metadata to get nice filenames
-    let meta: Array<{ slug?: string; name?: string; url?: string }> = [];
+    // Load metadata from Turso (or local JSON fallback)
+    let books: BookMeta[] = [];
     try {
-      const jsonPath = path.join(downloadsDir, "coloring-books.json");
+      books = await listBooks();
+    } catch {
+      // try local JSON
+      const jsonPath = path.join(process.cwd(), "public", "downloads", "coloring-books.json");
       if (fs.existsSync(jsonPath)) {
         const raw = JSON.parse(fs.readFileSync(jsonPath, "utf-8"));
-        meta = Array.isArray(raw) ? raw : raw.books ?? [];
+        books = Array.isArray(raw) ? raw : raw.books ?? [];
       }
-    } catch {
-      // ignore
     }
 
     const zip = new JSZip();
@@ -45,45 +44,49 @@ export async function POST(req: NextRequest) {
     const skipped: string[] = [];
 
     for (const slug of slugs) {
-      // Find the book's URL from metadata
-      const book = meta.find((b) => b.slug === slug);
+      const book = books.find((b) => b.slug === slug);
       const url = book?.url ?? `/downloads/${slug}-Coloring-Book.pdf`;
-      const filePath = path.join(
-        projectRoot,
-        "public",
-        url.replace(/^\//, "")
-      );
 
-      if (!fs.existsSync(filePath)) {
-        skipped.push(slug);
-        continue;
+      let buffer: Buffer | null = null;
+
+      if (url.startsWith("http://") || url.startsWith("https://")) {
+        // Fetch from Vercel Blob
+        const res = await fetch(url);
+        if (!res.ok) {
+          skipped.push(slug);
+          continue;
+        }
+        buffer = Buffer.from(await res.arrayBuffer());
+      } else {
+        // Local filesystem
+        const filePath = path.join(process.cwd(), "public", url.replace(/^\//, ""));
+        if (!fs.existsSync(filePath)) {
+          skipped.push(slug);
+          continue;
+        }
+        buffer = fs.readFileSync(filePath);
       }
 
-      const buffer = fs.readFileSync(filePath);
-      const fileName = url.split("/").pop() ?? `${slug}-Coloring-Book.pdf`;
-      zip.file(fileName, buffer);
-      added.push(fileName);
+      if (buffer) {
+        const fileName = `${slug}-Coloring-Book.pdf`;
+        zip.file(fileName, buffer);
+        added.push(fileName);
+      }
     }
 
     if (added.length === 0) {
       return NextResponse.json(
-        {
-          success: false,
-          error: "No PDFs found for the requested slugs",
-          skipped,
-        },
+        { success: false, error: "No PDFs found", skipped },
         { status: 404 }
       );
     }
 
-    // Generate the zip
     const zipBuffer = await zip.generateAsync({
       type: "nodebuffer",
       compression: "DEFLATE",
       compressionOptions: { level: 6 },
     });
 
-    // Return as binary zip
     const timestamp = new Date().toISOString().slice(0, 10);
     return new NextResponse(zipBuffer, {
       status: 200,
@@ -96,10 +99,7 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     console.error("[/api/batch-download] error:", err);
     return NextResponse.json(
-      {
-        success: false,
-        error: err instanceof Error ? err.message : "Unknown error",
-      },
+      { success: false, error: err instanceof Error ? err.message : "Unknown error" },
       { status: 500 }
     );
   }

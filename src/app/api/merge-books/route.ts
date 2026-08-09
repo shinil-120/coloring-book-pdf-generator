@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PDFDocument } from "pdf-lib";
+import { listBooks, type BookMeta } from "@/lib/turso";
 import fs from "fs";
 import path from "path";
 
@@ -8,18 +9,15 @@ export const dynamic = "force-dynamic";
 
 interface MergeSpec {
   slug: string;
-  pages: number; // number of pages to take from this book (from the start)
+  pages: number;
 }
 
 /**
  * POST /api/merge-books
- * Body: { books: [{ slug, pages }, ...], addBlanks?: boolean }
+ * Body: { books: [{ slug, pages }], addBlanks?: boolean }
  *
- * Assembles a compilation PDF by taking the first N pages from each
- * specified book, in order. Optionally inserts blank pages between
- * content pages (KDP bleed-through prevention).
- *
- * Returns: { success, pdf: data-uri, pages, contentPages, blankPages, fileName }
+ * Assembles a compilation PDF from multiple source PDFs.
+ * Fetches source PDFs from Vercel Blob (production) or local filesystem (dev).
  */
 export async function POST(req: NextRequest) {
   try {
@@ -34,8 +32,17 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const projectRoot = process.cwd();
-    const downloadsDir = path.join(projectRoot, "public", "downloads");
+    // Load metadata from Turso (or local JSON)
+    let books: BookMeta[] = [];
+    try {
+      books = await listBooks();
+    } catch {
+      const jsonPath = path.join(process.cwd(), "public", "downloads", "coloring-books.json");
+      if (fs.existsSync(jsonPath)) {
+        const raw = JSON.parse(fs.readFileSync(jsonPath, "utf-8"));
+        books = Array.isArray(raw) ? raw : raw.books ?? [];
+      }
+    }
 
     const outDoc = await PDFDocument.create();
 
@@ -43,41 +50,43 @@ export async function POST(req: NextRequest) {
       slug: string;
       doc: PDFDocument;
       pageCount: number;
-      taken: number;
     }
     const loaded: LoadedBook[] = [];
 
     // Load all source PDFs
     for (const spec of specs) {
-      const filePath = path.join(
-        downloadsDir,
-        `${spec.slug}-Coloring-Book.pdf`
-      );
-      if (!fs.existsSync(filePath)) {
-        return NextResponse.json(
-          { success: false, error: `PDF not found for slug "${spec.slug}"` },
-          { status: 404 }
-        );
+      const book = books.find((b) => b.slug === spec.slug);
+      const url = book?.url ?? `/downloads/${spec.slug}-Coloring-Book.pdf`;
+
+      let fileBuffer: Buffer;
+      if (url.startsWith("http://") || url.startsWith("https://")) {
+        // Fetch from Vercel Blob
+        const res = await fetch(url);
+        if (!res.ok) {
+          return NextResponse.json(
+            { success: false, error: `Failed to fetch PDF for "${spec.slug}": HTTP ${res.status}` },
+            { status: 404 }
+          );
+        }
+        fileBuffer = Buffer.from(await res.arrayBuffer());
+      } else {
+        // Local filesystem
+        const filePath = path.join(process.cwd(), "public", url.replace(/^\//, ""));
+        if (!fs.existsSync(filePath)) {
+          return NextResponse.json(
+            { success: false, error: `PDF not found for slug "${spec.slug}"` },
+            { status: 404 }
+          );
+        }
+        fileBuffer = fs.readFileSync(filePath);
       }
-      const fileBuffer = fs.readFileSync(filePath);
-      const srcDoc = await PDFDocument.load(fileBuffer, {
-        ignoreEncryption: true,
-      });
-      loaded.push({
-        slug: spec.slug,
-        doc: srcDoc,
-        pageCount: srcDoc.getPageCount(),
-        taken: 0,
-      });
+
+      const srcDoc = await PDFDocument.load(fileBuffer, { ignoreEncryption: true });
+      loaded.push({ slug: spec.slug, doc: srcDoc, pageCount: srcDoc.getPageCount() });
     }
 
     // Determine which source pages to copy
-    interface PageRef {
-      slug: string;
-      srcIndex: number; // 0-based index in source PDF
-    }
-    const pageRefs: PageRef[] = [];
-
+    const pageRefs: { slug: string; srcIndex: number }[] = [];
     for (const spec of specs) {
       const book = loaded.find((b) => b.slug === spec.slug);
       if (!book) continue;
@@ -85,7 +94,6 @@ export async function POST(req: NextRequest) {
       for (let i = 0; i < take; i++) {
         pageRefs.push({ slug: spec.slug, srcIndex: i });
       }
-      book.taken = take;
     }
 
     if (pageRefs.length === 0) {
@@ -95,7 +103,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Copy pages in bulk per source book (pdf-lib requires grouped indices)
+    // Copy pages
     const BLANK_W = 612;
     const BLANK_H = 792;
     let contentCount = 0;
@@ -103,11 +111,9 @@ export async function POST(req: NextRequest) {
 
     for (const ref of pageRefs) {
       if (addBlanks) {
-        // Insert a blank page before each content page
         outDoc.addPage([BLANK_W, BLANK_H]);
         blankCount++;
       }
-      // Copy the source page
       const book = loaded.find((b) => b.slug === ref.slug)!;
       const [copied] = await outDoc.copyPages(book.doc, [ref.srcIndex]);
       outDoc.addPage(copied);
@@ -115,15 +121,9 @@ export async function POST(req: NextRequest) {
     }
 
     const outBytes = await outDoc.save();
-    const dataUri = `data:application/pdf;base64,${Buffer.from(outBytes).toString(
-      "base64"
-    )}`;
+    const dataUri = `data:application/pdf;base64,${Buffer.from(outBytes).toString("base64")}`;
 
-    // Build a descriptive filename from the source slugs
-    const slugsPart = specs
-      .map((s) => s.slug)
-      .join("-")
-      .slice(0, 60);
+    const slugsPart = specs.map((s) => s.slug).join("-").slice(0, 60);
     const fileName = `compilation-${slugsPart}.pdf`;
 
     return NextResponse.json({
@@ -137,10 +137,7 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     console.error("[/api/merge-books] error:", err);
     return NextResponse.json(
-      {
-        success: false,
-        error: err instanceof Error ? err.message : "Unknown error",
-      },
+      { success: false, error: err instanceof Error ? err.message : "Unknown error" },
       { status: 500 }
     );
   }

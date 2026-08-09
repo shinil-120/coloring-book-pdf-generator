@@ -1,23 +1,26 @@
 import { NextRequest, NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
+import { listBooks, type BookMeta } from "@/lib/turso";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 interface PageData {
-  index: number;       // 0-based page index
-  pageNumber: number;  // 1-based
-  label: string;       // item name or "Page N"
-  thumbnail: string;   // /downloads/thumbnails/{slug}/page-N.png
+  index: number;
+  pageNumber: number;
+  label: string;
+  thumbnail: string;
 }
 
 /**
  * POST /api/book-pages
- * Body: { slug: string }  or  { pdfPath: string }
+ * Body: { slug: string }
  *
- * Returns all page thumbnails + labels for a book, for the preview modal.
- * Reads labels from coloring-books.json (best-effort).
+ * Returns all page thumbnails + labels for a book (for the preview modal).
+ *
+ * In production (Turso): reads book metadata from Turso, constructs Blob URLs.
+ * In local dev (no Turso): reads from local filesystem + JSON.
  *
  * Returns: { success, slug, pageCount, pages: [...] }
  */
@@ -25,89 +28,109 @@ export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
     const slug: string = body?.slug ?? "";
-    const pdfPath: string = body?.pdfPath ?? "";
 
-    if (!slug && !pdfPath) {
+    if (!slug) {
       return NextResponse.json(
-        { success: false, error: "slug or pdfPath is required" },
+        { success: false, error: "slug is required" },
         { status: 400 }
       );
     }
 
-    const projectRoot = process.cwd();
-    const downloadsDir = path.join(projectRoot, "public", "downloads");
-
-    // Resolve slug from pdfPath if needed
-    let resolvedSlug = slug;
-    if (!resolvedSlug && pdfPath) {
-      const fileName = path.basename(pdfPath);
-      resolvedSlug = fileName.replace(/-Coloring-Book\.pdf$/i, "").replace(/\.pdf$/i, "");
-    }
-
-    // Thumbnail directory
-    const thumbDir = path.join(downloadsDir, "thumbnails", resolvedSlug);
-    if (!fs.existsSync(thumbDir)) {
-      return NextResponse.json(
-        { success: false, error: `No thumbnails found for slug "${resolvedSlug}"` },
-        { status: 404 }
-      );
-    }
-
-    // List page-N.png files (1-indexed)
-    const files = fs
-      .readdirSync(thumbDir)
-      .filter((f) => /^page-\d+\.png$/i.test(f))
-      .sort((a, b) => {
-        const na = parseInt(a.match(/\d+/)![0], 10);
-        const nb = parseInt(b.match(/\d+/)![0], 10);
-        return na - nb;
-      });
-
-    if (files.length === 0) {
-      return NextResponse.json(
-        { success: false, error: "No page thumbnails found" },
-        { status: 404 }
-      );
-    }
-
-    // Load labels from metadata JSON (best-effort)
-    let itemLabels: string[] | null = null;
+    // ── Try Turso first ────────────────────────────────────────────────
+    let book: BookMeta | null = null;
     try {
-      const jsonPath = path.join(downloadsDir, "coloring-books.json");
-      if (fs.existsSync(jsonPath)) {
-        const meta = JSON.parse(fs.readFileSync(jsonPath, "utf-8"));
-        const arr = Array.isArray(meta) ? meta : meta.books ?? [];
-        const book = arr.find(
-          (b: { slug?: string; url?: string }) =>
-            b.slug === resolvedSlug ||
-            (pdfPath && b.url === pdfPath)
-        );
-        if (book && Array.isArray(book.items) && book.items.length > 0) {
-          itemLabels = book.items;
-        }
-      }
+      const allBooks = await listBooks();
+      book = allBooks.find((b) => b.slug === slug) ?? null;
     } catch {
       // ignore
     }
 
-    const pages: PageData[] = files.map((file, i) => {
-      const pageNumber = parseInt(file.match(/\d+/)![0], 10);
-      const label =
-        itemLabels && itemLabels[i] ? itemLabels[i] : `Page ${pageNumber}`;
-      return {
-        index: i,
-        pageNumber,
-        label,
-        thumbnail: `/downloads/thumbnails/${resolvedSlug}/${file}`,
-      };
-    });
+    if (book) {
+      // Construct Blob thumbnail URLs from the book's PDF URL
+      // PDF URL: https://xxx.blob.vercel-storage.com/pdfs/Pets-Coloring-Book.pdf
+      // Thumb:   https://xxx.blob.vercel-storage.com/thumbnails/Pets/page-N.png
+      let thumbnailBaseUrl: string;
+      if (book.url && book.url.startsWith("http")) {
+        const blobBase = book.url.replace(/\/pdfs\/.*$/, "");
+        thumbnailBaseUrl = `${blobBase}/thumbnails/${slug}`;
+      } else {
+        // Local URL
+        thumbnailBaseUrl = `/downloads/thumbnails/${slug}`;
+      }
 
-    return NextResponse.json({
-      success: true,
-      slug: resolvedSlug,
-      pageCount: pages.length,
-      pages,
-    });
+      const pageCount = book.pages;
+      const items = book.items ?? [];
+      const pages: PageData[] = [];
+      for (let i = 0; i < pageCount; i++) {
+        pages.push({
+          index: i,
+          pageNumber: i + 1,
+          label: items[i] ?? `Page ${i + 1}`,
+          thumbnail: `${thumbnailBaseUrl}/page-${i + 1}.png`,
+        });
+      }
+
+      return NextResponse.json({
+        success: true,
+        slug,
+        pageCount: pages.length,
+        pages,
+      });
+    }
+
+    // ── Fallback: local filesystem ─────────────────────────────────────
+    const projectRoot = process.cwd();
+    const thumbDir = path.join(projectRoot, "public", "downloads", "thumbnails", slug);
+    if (fs.existsSync(thumbDir)) {
+      const files = fs
+        .readdirSync(thumbDir)
+        .filter((f) => /^page-\d+\.png$/i.test(f))
+        .sort((a, b) => {
+          const na = parseInt(a.match(/\d+/)![0], 10);
+          const nb = parseInt(b.match(/\d+/)![0], 10);
+          return na - nb;
+        });
+
+      if (files.length > 0) {
+        // Load labels from local JSON
+        let itemLabels: string[] | null = null;
+        try {
+          const jsonPath = path.join(projectRoot, "public", "downloads", "coloring-books.json");
+          if (fs.existsSync(jsonPath)) {
+            const meta = JSON.parse(fs.readFileSync(jsonPath, "utf-8"));
+            const arr = Array.isArray(meta) ? meta : meta.books ?? [];
+            const localBook = arr.find((b: { slug?: string }) => b.slug === slug);
+            if (localBook && Array.isArray(localBook.items)) {
+              itemLabels = localBook.items;
+            }
+          }
+        } catch {
+          // ignore
+        }
+
+        const pages: PageData[] = files.map((file, i) => {
+          const pageNumber = parseInt(file.match(/\d+/)![0], 10);
+          return {
+            index: i,
+            pageNumber,
+            label: itemLabels?.[i] ?? `Page ${pageNumber}`,
+            thumbnail: `/downloads/thumbnails/${slug}/${file}`,
+          };
+        });
+
+        return NextResponse.json({
+          success: true,
+          slug,
+          pageCount: pages.length,
+          pages,
+        });
+      }
+    }
+
+    return NextResponse.json(
+      { success: false, error: `No thumbnails found for slug "${slug}"` },
+      { status: 404 }
+    );
   } catch (err) {
     console.error("[/api/book-pages] error:", err);
     return NextResponse.json(

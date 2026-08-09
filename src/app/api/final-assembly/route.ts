@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PDFDocument } from "pdf-lib";
+import { listBooks, type BookMeta } from "@/lib/turso";
 import fs from "fs";
 import path from "path";
 
@@ -8,23 +9,10 @@ export const dynamic = "force-dynamic";
 
 /**
  * POST /api/final-assembly
- * Body: {
- *   interiorSlug: string,   // e.g. "Pets" → loads public/downloads/Pets-Coloring-Book.pdf
- *   coverData?: string,     // base64 or data-uri of a generated cover PDF (optional)
- *   coverSlug?: string,     // OR: slug of an existing book to use as cover source (optional)
- *   title: string,
- *   author: string,
- *   subject: string,
- *   keywords: string,
- * }
+ * Body: { interiorSlug, coverData?, title, author, subject, keywords }
  *
- * Combines the cover PDF (first page) + interior PDF (all pages) into one
- * final KDP-ready file, with document metadata (Title, Author, Subject,
- * Keywords) injected.
- *
- * If no cover is provided, the final file is just the interior with metadata.
- *
- * Returns: { success, pdf: data-uri, pages, fileName }
+ * Combines cover PDF + interior PDF into one final KDP-ready file with metadata.
+ * Fetches interior from Vercel Blob (production) or local filesystem (dev).
  */
 export async function POST(req: NextRequest) {
   try {
@@ -43,25 +31,51 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const projectRoot = process.cwd();
-    const downloadsDir = path.join(projectRoot, "public", "downloads");
-    const interiorPath = path.join(downloadsDir, `${interiorSlug}-Coloring-Book.pdf`);
-
-    if (!fs.existsSync(interiorPath)) {
-      return NextResponse.json(
-        { success: false, error: `Interior PDF not found: ${interiorSlug}` },
-        { status: 404 }
-      );
+    // Find the interior PDF URL from Turso (or local JSON)
+    let interiorUrl: string | null = null;
+    try {
+      const allBooks = await listBooks();
+      const book = allBooks.find((b: BookMeta) => b.slug === interiorSlug);
+      if (book) {
+        interiorUrl = book.url;
+      }
+    } catch {
+      // ignore
     }
 
-    // Create the final document
+    // Fallback to local path
+    if (!interiorUrl) {
+      interiorUrl = `/downloads/${interiorSlug}-Coloring-Book.pdf`;
+    }
+
+    // Load interior PDF buffer
+    let interiorBuffer: Buffer;
+    if (interiorUrl.startsWith("http://") || interiorUrl.startsWith("https://")) {
+      const res = await fetch(interiorUrl);
+      if (!res.ok) {
+        return NextResponse.json(
+          { success: false, error: `Failed to fetch interior PDF: HTTP ${res.status}` },
+          { status: 404 }
+        );
+      }
+      interiorBuffer = Buffer.from(await res.arrayBuffer());
+    } else {
+      const interiorPath = path.join(process.cwd(), "public", interiorUrl.replace(/^\//, ""));
+      if (!fs.existsSync(interiorPath)) {
+        return NextResponse.json(
+          { success: false, error: `Interior PDF not found: ${interiorSlug}` },
+          { status: 404 }
+        );
+      }
+      interiorBuffer = fs.readFileSync(interiorPath);
+    }
+
     const finalDoc = await PDFDocument.create();
 
-    // ── Add cover (if provided) ──────────────────────────────────────
+    // Add cover (if provided)
     let coverPageCount = 0;
     if (coverData) {
       try {
-        // Strip data-uri prefix if present
         const b64 = coverData.replace(/^data:application\/pdf;base64,/, "");
         const coverBytes = Buffer.from(b64, "base64");
         const coverDoc = await PDFDocument.load(coverBytes, { ignoreEncryption: true });
@@ -70,17 +84,15 @@ export async function POST(req: NextRequest) {
         coverPageCount = coverPages.length;
       } catch (e) {
         console.error("[/api/final-assembly] cover load error:", e);
-        // continue without cover
       }
     }
 
-    // ── Add interior pages ───────────────────────────────────────────
-    const interiorBytes = fs.readFileSync(interiorPath);
-    const interiorDoc = await PDFDocument.load(interiorBytes, { ignoreEncryption: true });
+    // Add interior pages
+    const interiorDoc = await PDFDocument.load(interiorBuffer, { ignoreEncryption: true });
     const interiorPages = await finalDoc.copyPages(interiorDoc, interiorDoc.getPageIndices());
     interiorPages.forEach((p) => finalDoc.addPage(p));
 
-    // ── Inject metadata ──────────────────────────────────────────────
+    // Inject metadata
     finalDoc.setTitle(title);
     finalDoc.setAuthor(author);
     finalDoc.setSubject(subject);
@@ -108,10 +120,7 @@ export async function POST(req: NextRequest) {
   } catch (err) {
     console.error("[/api/final-assembly] error:", err);
     return NextResponse.json(
-      {
-        success: false,
-        error: err instanceof Error ? err.message : "Unknown error",
-      },
+      { success: false, error: err instanceof Error ? err.message : "Unknown error" },
       { status: 500 }
     );
   }
