@@ -522,3 +522,51 @@ Stage Summary:
 - **Body (largest) = natural main color**, sub-regions = other palette colors
 - **No rectangular box** — color follows subject outline
 - All 7 books regenerated with refined colorization
+
+---
+Task ID: pets-30-ai-full
+Agent: Z.ai Code (user-requested full 30-page AI generation)
+Task: Remove vector/placeholder books; generate all 30 AI images for Pets coloring book.
+
+Work Log:
+- User requested: remove all vector-based placeholder books, keep only AI-generated books
+- User clarified colorization: dog with closed nose, closed ears, closed legs, and fingernails = different regions with different colors (already handled by the closed-lines-only algorithm)
+
+Removed placeholder books:
+- Deleted coloring-books/ directories: Dinosaurs, Dragons, Flowers, Insects, Ocean-Animals, Vehicles
+- Deleted PDFs: Dinosaurs, Dragons, Flowers, Insects, Ocean-Animals, Vehicles Coloring Books
+- Deleted thumbnail directories for all 6 placeholder books
+- Cleaned coloring-books.json to contain only Pets
+
+Generated all 30 AI images for Pets:
+- Used `bun run scripts/generate-images.ts pets` (no --limit = all 30 items)
+- 5 images already existed (Dog, Cat, Hamster, Rabbit, Parrot) — skipped
+- Generated 25 new AI images via z-ai-web-dev-sdk (1024×1024, B&W line art)
+- Rate-limit retries handled automatically (429 → wait 15×attempt seconds)
+- Generated remaining items individually when timeouts occurred: Chick, Duckling, Tarantula, Snail, Iguana, Finch
+- Total: 30/30 AI images generated ✓
+
+Processed all 30 images:
+- Ran `bun run scripts/regenerate-pdfs-no-covers.ts pets` (full 30 items)
+- Cleaned B&W (threshold + erode) for all 30
+- Auto-colorized all 30 with natural palettes using closed-lines-only algorithm
+- Built 30-page PDF (4.2 MB)
+- Generated 30 thumbnails via pdf-to-img
+
+VLM verification of new images:
+- Chick: no box, 4 regions (body, wings, beak) with natural yellow color ✓
+- Iguana: no box, 4 regions (dark green, light green) with natural green main color ✓
+- Colorization correctly identifies multiple closed regions (nose, ears, legs, wings, beak) and applies different colors
+
+App verification:
+- Only 1 book shown (Pets Coloring Book, 30 pages, 4.2 MB)
+- 30-page PDF verified via pdf-lib
+- 30 thumbnails generated
+- Clean lint, app healthy
+
+Stage Summary:
+- **All placeholder books removed** — only AI-generated Pets remains
+- **Full 30-page Pets Coloring Book complete** — all AI-generated, all colorized
+- 4.2 MB PDF, 30 thumbnails, 30 items (Dog through Finch)
+- Colorization uses closed-lines-only algorithm: body gets natural main color, enclosed sub-regions (nose, ears, legs, etc.) get other palette colors
+- App shows 1 book with 30 pages
