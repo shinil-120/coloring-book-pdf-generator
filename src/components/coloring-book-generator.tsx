@@ -16,6 +16,7 @@ import {
   X,
   Grid3x3,
   List,
+  Eye,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -30,6 +31,7 @@ import {
   CardFooter,
 } from "@/components/ui/card";
 import { getCategoryTheme } from "@/lib/coloring-data";
+import { BookPreviewModal } from "@/components/book-preview-modal";
 
 interface BookMeta {
   name: string;
@@ -51,6 +53,8 @@ export function ColoringBookGenerator() {
   const [search, setSearch] = useState("");
   const [activeCategory, setActiveCategory] = useState<string>("all");
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
+  const [previewBook, setPreviewBook] = useState<BookMeta | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
 
   const fetchBooks = useCallback(async () => {
     setLoading(true);
@@ -88,6 +92,11 @@ export function ColoringBookGenerator() {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+  };
+
+  const handlePreview = (book: BookMeta) => {
+    setPreviewBook(book);
+    setPreviewOpen(true);
   };
 
   // Unique categories for the filter chips
@@ -204,6 +213,7 @@ export function ColoringBookGenerator() {
               book={book}
               index={idx}
               onDownload={() => handleDownload(book)}
+              onPreview={() => handlePreview(book)}
             />
           ))}
         </div>
@@ -215,6 +225,7 @@ export function ColoringBookGenerator() {
               book={book}
               index={idx}
               onDownload={() => handleDownload(book)}
+              onPreview={() => handlePreview(book)}
             />
           ))}
         </div>
@@ -222,6 +233,14 @@ export function ColoringBookGenerator() {
 
       {/* Info box */}
       <InfoBox />
+
+      {/* Book preview modal */}
+      <BookPreviewModal
+        book={previewBook}
+        open={previewOpen}
+        onOpenChange={setPreviewOpen}
+        onDownload={handleDownload}
+      />
     </div>
   );
 }
@@ -344,10 +363,12 @@ function BookRow({
   book,
   index,
   onDownload,
+  onPreview,
 }: {
   book: BookMeta;
   index: number;
   onDownload: () => void;
+  onPreview: () => void;
 }) {
   const theme = getCategoryTheme(book.category);
   const thumb = `/downloads/thumbnails/${book.slug}/page-1.png`;
@@ -390,15 +411,26 @@ function BookRow({
         </div>
       </div>
 
-      {/* download */}
-      <Button
-        onClick={onDownload}
-        size="sm"
-        className="h-9 shrink-0 gap-1.5 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 px-4 text-xs font-bold text-white shadow-sm hover:from-emerald-600 hover:to-teal-600"
-      >
-        <Download className="h-3.5 w-3.5" />
-        Download
-      </Button>
+      {/* actions */}
+      <div className="flex shrink-0 items-center gap-2">
+        <Button
+          onClick={onPreview}
+          size="sm"
+          variant="outline"
+          className="h-9 shrink-0 gap-1.5 rounded-full border-stone-200 px-3 text-xs font-bold text-stone-600 hover:border-rose-300 hover:bg-rose-50 hover:text-rose-600"
+        >
+          <Eye className="h-3.5 w-3.5" />
+          <span className="hidden sm:inline">Preview</span>
+        </Button>
+        <Button
+          onClick={onDownload}
+          size="sm"
+          className="h-9 shrink-0 gap-1.5 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 px-4 text-xs font-bold text-white shadow-sm hover:from-emerald-600 hover:to-teal-600"
+        >
+          <Download className="h-3.5 w-3.5" />
+          Download
+        </Button>
+      </div>
     </div>
   );
 }
@@ -469,10 +501,12 @@ function BookCard({
   book,
   index,
   onDownload,
+  onPreview,
 }: {
   book: BookMeta;
   index: number;
   onDownload: () => void;
+  onPreview: () => void;
 }) {
   const theme = getCategoryTheme(book.category);
 
@@ -515,8 +549,12 @@ function BookCard({
       </CardHeader>
 
       <CardContent className="flex flex-1 flex-col pb-3">
-        {/* Thumbnail preview — no timestamp overlay (moved below) */}
-        <div className="relative mb-3 flex h-40 items-center justify-center overflow-hidden rounded-xl border border-stone-100 bg-gradient-to-br from-stone-50 to-stone-100">
+        {/* Thumbnail preview — clickable to open full preview modal */}
+        <button
+          onClick={onPreview}
+          className="relative mb-3 flex h-40 w-full cursor-pointer items-center justify-center overflow-hidden rounded-xl border border-stone-100 bg-gradient-to-br from-stone-50 to-stone-100 transition-all group-hover:border-stone-300"
+          aria-label={`Preview ${book.name}`}
+        >
           <div className={`absolute inset-x-0 top-0 h-1 bg-gradient-to-r ${theme.gradient} opacity-60`} />
           <img
             src={thumb}
@@ -536,7 +574,14 @@ function BookCard({
               }
             }}
           />
-        </div>
+          {/* Hover overlay with Eye icon */}
+          <div className="absolute inset-0 flex items-center justify-center bg-stone-900/0 opacity-0 transition-all duration-300 group-hover:bg-stone-900/20 group-hover:opacity-100">
+            <div className="flex items-center gap-1.5 rounded-full bg-white/95 px-3 py-1.5 text-xs font-bold text-stone-700 shadow-lg backdrop-blur">
+              <Eye className="h-3.5 w-3.5 text-rose-500" />
+              Preview
+            </div>
+          </div>
+        </button>
 
         {/* Meta row */}
         <div className="mb-2 flex flex-wrap items-center gap-1.5 text-xs font-semibold text-stone-600">
@@ -564,13 +609,21 @@ function BookCard({
         <div className="flex-1" />
       </CardContent>
 
-      <CardFooter className="pt-0">
+      <CardFooter className="gap-2 pt-0">
+        <Button
+          onClick={onPreview}
+          variant="outline"
+          className="h-11 shrink-0 gap-1.5 rounded-full border-stone-200 px-4 text-xs font-bold text-stone-600 transition-all hover:border-rose-300 hover:bg-rose-50 hover:text-rose-600"
+        >
+          <Eye className="h-4 w-4" />
+          Preview
+        </Button>
         <Button
           onClick={onDownload}
-          className="h-11 w-full gap-2 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 text-sm font-bold text-white shadow-md shadow-emerald-200 transition-all hover:from-emerald-600 hover:to-teal-600 hover:shadow-lg hover:shadow-emerald-300"
+          className="h-11 flex-1 gap-2 rounded-full bg-gradient-to-r from-emerald-500 to-teal-500 text-sm font-bold text-white shadow-md shadow-emerald-200 transition-all hover:from-emerald-600 hover:to-teal-600 hover:shadow-lg hover:shadow-emerald-300"
         >
           <Download className="h-4 w-4" />
-          Download PDF
+          Download
         </Button>
       </CardFooter>
     </Card>

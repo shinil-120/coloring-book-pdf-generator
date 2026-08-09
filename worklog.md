@@ -178,3 +178,60 @@ Stage Summary:
 - All future objects automatically benefit from: no-white sanitization + improved colorization
 - Pets book regenerated (5 pages, 477 KB — up from 232 KB due to more colored pixels)
 - Clean lint, no errors
+
+---
+Task ID: cron-review-2
+Agent: Z.ai Code (webDevReview cron — round 2)
+Task: Assess project status, perform QA testing, add new features and styling improvements.
+
+Work Log:
+- Reviewed worklog — project had 7 books (1 AI-generated Pets + 6 placeholder), NO-WHITE rule + improved colorization already implemented
+- QA tested with agent-browser + VLM: Tab 1 (7 books, search/filter, grid/list views), Tab 2 (load Pets → 5 pages → add blanks → 10 pages → assemble → success), all working, no errors
+- VLM rated Tab 1 at 8-9/10, editor working perfectly
+
+New features implemented this round:
+1. **Book Preview Modal (Tab 1)** — click any book card thumbnail or "Preview" button to open a full-page modal:
+   - Large page preview in center with prev/next navigation arrows
+   - Thumbnail strip sidebar showing all pages (click any to jump)
+   - Page label badge (e.g. "Page 1 / 5 · Dog")
+   - Download button at bottom of sidebar
+   - Keyboard navigation (← → arrows, Esc to close)
+   - Category-themed gradient header with emoji + book metadata
+   - Created new API route `/api/book-pages` to fetch all page thumbnails + labels
+   - Created `src/components/book-preview-modal.tsx` (240 lines)
+
+2. **Page Preview Modal (Tab 2 editor)** — click any page card thumbnail to view it full-size:
+   - Large page preview with prev/next navigation
+   - Violet/purple gradient header (matching editor theme)
+   - Shows page position "Page 3 / 5" + item label
+   - Blank pages show dashed-border placeholder with "KDP bleed-through prevention" text
+   - Keyboard navigation (← → arrows, Esc to close)
+   - Footer with kbd hints
+   - Added `PagePreviewModal` component to pdf-editor.tsx
+
+3. **Card footer redesign (Tab 1)** — each book card now has:
+   - Outline "Preview" button (rose hover) with Eye icon
+   - Filled "Download" button (emerald gradient)
+   - Thumbnail is clickable (hover overlay shows "Preview" pill)
+   - List view (BookRow) also has Preview + Download buttons
+
+4. **API route `/api/book-pages`** — returns all page thumbnails + labels for a book slug, used by the preview modal. Reads labels from coloring-books.json items array.
+
+QA verification:
+- Book preview modal: VLM confirmed large preview, thumbnail strip, navigation arrows, download button — all working
+- Arrow key navigation: tested moving from page 1 → page 3 (Hamster) in both modals
+- Esc closes both modals correctly
+- Editor page preview: VLM confirmed large preview, prev/next arrows, page label "Dog", header "Page 1/5"
+- Clean lint (0 errors, 0 warnings), no runtime errors
+- VLM final rating: 9/10
+
+Stage Summary:
+- **Status: FEATURE-RICH, POLISHED**
+- 2 new high-value features: book preview modal + editor page preview modal
+- Both modals support keyboard navigation (arrows + Esc)
+- New API route `/api/book-pages` for fetching all page thumbnails
+- Card footers redesigned with Preview + Download buttons
+- VLM design rating: 9/10
+- All existing functionality preserved (search, filter, grid/list, drag-and-drop, add blanks, assemble)
+- Key new files: `src/components/book-preview-modal.tsx`, `src/app/api/book-pages/route.ts`
+- Next opportunities: book detail page, batch download, custom page upload, print preview

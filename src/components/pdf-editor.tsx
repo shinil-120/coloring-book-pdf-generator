@@ -30,6 +30,9 @@ import {
   FileText,
   Eye,
   Loader2,
+  ChevronLeft,
+  ChevronRight,
+  X,
   CheckCircle2,
   Download,
   RefreshCw,
@@ -42,6 +45,11 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { getCategoryTheme } from "@/lib/coloring-data";
 
 // ---------------------------------------------------------------------------
@@ -97,6 +105,9 @@ export function PdfEditor() {
     contentPages: number;
     fileName: string;
   } | null>(null);
+
+  // Page preview modal state (click a page card to view it full-size)
+  const [previewPageIdx, setPreviewPageIdx] = useState<number | null>(null);
 
   // Drag state
   const [activeId, setActiveId] = useState<string | null>(null);
@@ -459,6 +470,7 @@ export function PdfEditor() {
                     position={idx + 1}
                     onDelete={() => deletePage(page.id)}
                     onDuplicate={() => duplicatePage(page.id)}
+                    onPreview={() => setPreviewPageIdx(idx)}
                   />
                 ))}
               </div>
@@ -514,6 +526,14 @@ export function PdfEditor() {
           </div>
         </>
       )}
+
+      {/* Page preview modal — click a page card to view it full-size */}
+      <PagePreviewModal
+        pages={pages}
+        currentIndex={previewPageIdx}
+        onIndexChange={setPreviewPageIdx}
+        bookName={selectedBook?.name}
+      />
     </div>
   );
 }
@@ -657,11 +677,13 @@ function SortablePageCard({
   position,
   onDelete,
   onDuplicate,
+  onPreview,
 }: {
   page: EditPage;
   position: number;
   onDelete: () => void;
   onDuplicate: () => void;
+  onPreview: () => void;
 }) {
   const {
     attributes,
@@ -715,7 +737,7 @@ function SortablePageCard({
         <GripVertical className="h-4 w-4" />
       </button>
 
-      <PageCardVisual page={page} position={position} />
+      <PageCardVisual page={page} position={position} onPreview={onPreview} />
 
       {/* Action buttons — always visible on mobile, hover-reveal on desktop */}
       <div className="mt-2 flex items-center gap-1.5 opacity-100 transition-opacity md:opacity-0 md:group-hover:opacity-100">
@@ -744,20 +766,27 @@ function SortablePageCard({
 function PageCardVisual({
   page,
   position,
+  onPreview,
 }: {
   page: EditPage;
   position: number;
+  onPreview?: () => void;
 }) {
   return (
     <>
-      {/* Thumbnail */}
-      <div
+      {/* Thumbnail — clickable to open full-size preview (only for non-blank) */}
+      <button
+        type="button"
+        onClick={onPreview && !page.isBlank ? onPreview : undefined}
+        disabled={page.isBlank || !onPreview}
         className={
-          "relative flex h-[112px] items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br " +
+          "relative flex h-[112px] w-full items-center justify-center overflow-hidden rounded-xl bg-gradient-to-br transition-all " +
           (page.isBlank
-            ? "from-stone-50 to-stone-100"
-            : "from-stone-50 to-white")
+            ? "from-stone-50 to-stone-100 cursor-default"
+            : "from-stone-50 to-white cursor-pointer hover:ring-2 hover:ring-violet-200") +
+          (onPreview && !page.isBlank ? " group/thumb" : "")
         }
+        aria-label={page.isBlank ? "Blank page" : `Preview page ${position}`}
       >
         {page.isBlank ? (
           <div className="flex h-full w-full flex-col items-center justify-center gap-1.5 border-2 border-dashed border-stone-300 text-stone-400">
@@ -767,19 +796,30 @@ function PageCardVisual({
             </span>
           </div>
         ) : page.thumbnail ? (
-          <img
-            src={page.thumbnail}
-            alt={`Page ${position} — ${page.label}`}
-            className="h-full w-full object-contain p-1.5"
-            loading="lazy"
-            draggable={false}
-          />
+          <>
+            <img
+              src={page.thumbnail}
+              alt={`Page ${position} — ${page.label}`}
+              className="h-full w-full object-contain p-1.5"
+              loading="lazy"
+              draggable={false}
+            />
+            {/* Hover overlay */}
+            {onPreview && (
+              <div className="absolute inset-0 flex items-center justify-center bg-stone-900/0 opacity-0 transition-all group-hover/thumb:bg-stone-900/15 group-hover/thumb:opacity-100">
+                <div className="flex items-center gap-1 rounded-full bg-white/95 px-2.5 py-1 text-[10px] font-bold text-stone-700 shadow-md">
+                  <Eye className="h-3 w-3 text-violet-500" />
+                  View
+                </div>
+              </div>
+            )}
+          </>
         ) : (
           <div className="flex h-full w-full items-center justify-center text-stone-300">
             <FileText className="h-6 w-6" />
           </div>
         )}
-      </div>
+      </button>
 
       {/* Label */}
       <div className="mt-1.5 truncate px-0.5 text-center text-xs font-bold text-stone-700">
@@ -906,5 +946,145 @@ function DownloadStep({
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Page preview modal (editor) — click a page card to view it full-size
+// ---------------------------------------------------------------------------
+
+function PagePreviewModal({
+  pages,
+  currentIndex,
+  onIndexChange,
+  bookName,
+}: {
+  pages: EditPage[];
+  currentIndex: number | null;
+  onIndexChange: (idx: number | null) => void;
+  bookName?: string;
+}) {
+  const open = currentIndex !== null;
+  const page = currentIndex !== null ? pages[currentIndex] : null;
+
+  // Keyboard navigation
+  useEffect(() => {
+    if (!open || currentIndex === null) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "ArrowLeft") {
+        e.preventDefault();
+        onIndexChange(Math.max(0, currentIndex - 1));
+      } else if (e.key === "ArrowRight") {
+        e.preventDefault();
+        onIndexChange(Math.min(pages.length - 1, currentIndex + 1));
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [open, currentIndex, pages.length, onIndexChange]);
+
+  if (!page || currentIndex === null) return null;
+
+  const hasPrev = currentIndex > 0;
+  const hasNext = currentIndex < pages.length - 1;
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onIndexChange(null)}>
+      <DialogContent className="max-w-3xl overflow-hidden rounded-3xl border-stone-200 bg-white p-0 shadow-2xl">
+        <DialogTitle className="sr-only">
+          Page {currentIndex + 1} preview
+        </DialogTitle>
+        {/* Header */}
+        <div className="flex items-center justify-between gap-3 bg-gradient-to-r from-violet-500 to-purple-500 px-5 py-3">
+          <div className="flex min-w-0 items-center gap-2 text-white">
+            <FileText className="h-4 w-4 shrink-0" />
+            <span className="truncate text-sm font-bold">
+              {bookName ? `${bookName} — ` : ""}Page {currentIndex + 1} /{" "}
+              {pages.length}
+            </span>
+          </div>
+          <button
+            onClick={() => onIndexChange(null)}
+            className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-white/30 text-white backdrop-blur transition-colors hover:bg-white/50"
+            aria-label="Close preview"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+
+        {/* Main preview area */}
+        <div className="relative flex items-center justify-center bg-gradient-to-br from-stone-50 to-stone-100 p-4 md:p-8">
+          {/* Prev/Next */}
+          <button
+            onClick={() => hasPrev && onIndexChange(currentIndex - 1)}
+            disabled={!hasPrev}
+            className="absolute left-2 top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-stone-600 shadow-md backdrop-blur transition-all hover:bg-white hover:text-violet-500 disabled:cursor-not-allowed disabled:opacity-30 md:left-4"
+            aria-label="Previous page"
+          >
+            <ChevronLeft className="h-6 w-6" />
+          </button>
+          <button
+            onClick={() => hasNext && onIndexChange(currentIndex + 1)}
+            disabled={!hasNext}
+            className="absolute right-2 top-1/2 z-10 flex h-11 w-11 -translate-y-1/2 items-center justify-center rounded-full bg-white/90 text-stone-600 shadow-md backdrop-blur transition-all hover:bg-white hover:text-violet-500 disabled:cursor-not-allowed disabled:opacity-30 md:right-4"
+            aria-label="Next page"
+          >
+            <ChevronRight className="h-6 w-6" />
+          </button>
+
+          {/* Page image or blank placeholder */}
+          {page.isBlank ? (
+            <div className="flex h-[60vh] w-full max-w-md flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-stone-300 bg-white text-stone-400">
+              <Eye className="h-12 w-12" />
+              <span className="text-sm font-bold uppercase tracking-wide">
+                Blank Page
+              </span>
+              <span className="text-xs text-stone-400">
+                KDP bleed-through prevention
+              </span>
+            </div>
+          ) : page.thumbnail ? (
+            <div className="max-h-[60vh] w-full max-w-2xl overflow-hidden rounded-2xl border border-stone-200 bg-white shadow-lg">
+              <img
+                src={page.thumbnail}
+                alt={`Page ${currentIndex + 1} — ${page.label}`}
+                className="mx-auto h-full w-full object-contain"
+                draggable={false}
+              />
+            </div>
+          ) : (
+            <div className="flex h-[60vh] w-full items-center justify-center text-stone-300">
+              <FileText className="h-12 w-12" />
+            </div>
+          )}
+        </div>
+
+        {/* Footer with label + hint */}
+        <div className="flex items-center justify-between gap-3 border-t border-stone-100 bg-stone-50 px-5 py-2.5">
+          <div className="min-w-0">
+            <span className="text-xs font-bold text-stone-700">
+              {page.isBlank ? "(blank)" : page.label}
+            </span>
+          </div>
+          <div className="flex items-center gap-3 text-[11px] font-medium text-stone-400">
+            <span className="inline-flex items-center gap-1">
+              <kbd className="rounded border border-stone-300 bg-white px-1.5 py-0.5 font-mono text-[10px] text-stone-600">
+                ←
+              </kbd>
+              <kbd className="rounded border border-stone-300 bg-white px-1.5 py-0.5 font-mono text-[10px] text-stone-600">
+                →
+              </kbd>
+              navigate
+            </span>
+            <span className="hidden sm:inline-flex items-center gap-1">
+              <kbd className="rounded border border-stone-300 bg-white px-1.5 py-0.5 font-mono text-[10px] text-stone-600">
+                Esc
+              </kbd>
+              close
+            </span>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
