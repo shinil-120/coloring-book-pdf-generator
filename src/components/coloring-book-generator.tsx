@@ -106,8 +106,12 @@ export function ColoringBookGenerator() {
       description: `${book.pages} pages · ${book.size}`,
     });
     const a = document.createElement("a");
-    a.href = book.url;
-    a.download = book.url.split("/").pop() ?? "coloring-book.pdf";
+    // Add cache-busting query param for Blob URLs to prevent browser serving old cached PDF
+    const downloadUrl = book.url.startsWith("http")
+      ? book.url + (book.url.includes("?") ? "&" : "?") + "t=" + Date.now()
+      : book.url;
+    a.href = downloadUrl;
+    a.download = book.url.split("/").pop()?.split("?")[0] ?? "coloring-book.pdf";
     a.rel = "noopener";
     document.body.appendChild(a);
     a.click();
