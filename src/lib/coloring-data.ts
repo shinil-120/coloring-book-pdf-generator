@@ -257,7 +257,7 @@ export const BOOKS: ColoringBook[] = [
     name: "Indian Mythology and Gods Coloring Book",
     slug: "Indian-Mythology",
     category: "Indian Mythology",
-    description: "45 pages — no covers, no blanks",
+    description: "51 pages — no covers, no blanks",
     items: [
       "Ganesha", "Krishna", "Shiva", "Durga", "Hanuman",
       "Lakshmi", "Saraswati", "Vishnu", "Rama", "Kali",
@@ -268,6 +268,8 @@ export const BOOKS: ColoringBook[] = [
       "Indra Deva", "Agni Deva", "Vayu Deva", "Varuna Deva", "Surya Deva",
       "Chandra Deva", "Yama Deva", "Kubera Deva", "Rudra", "Parvati",
       "Savitri", "Gayatri", "Tulsi Plant", "Banyan Tree", "Kamadhenu Cow",
+      "Nataraja Shiva", "Ardhanarishvara Shiva", "Bhairava Shiva",
+      "Matsya Avatar Vishnu", "Kurma Avatar Vishnu", "Narasimha Avatar Vishnu",
     ],
   },
 ];
@@ -748,6 +750,16 @@ export const NATURAL_PALETTES: Record<string, Palette> = {
   "Tulsi Plant": [[80, 160, 70], [50, 110, 40], [180, 220, 120]],    // green leaves + dark + light
   "Banyan Tree": [[120, 90, 50], [80, 60, 30], [180, 150, 100]],     // brown trunk + dark + light
   "Kamadhenu Cow": [[240, 230, 220], [180, 160, 140], [60, 50, 40]], // white body + tan + dark hooves
+
+  // ---- Shiva Avatars ----
+  "Nataraja Shiva": [[80, 140, 180], [255, 180, 40], [220, 60, 40]],  // blue-grey skin + gold ring of fire + red
+  "Ardhanarishvara Shiva": [[80, 140, 180], [255, 150, 180], [255, 255, 255]], // blue Shiva half + pink Parvati half + white ash
+  "Bhairava Shiva": [[60, 40, 50], [180, 30, 30], [120, 90, 100]],    // dark + red + grey (fierce form)
+
+  // ---- Vishnu Avatars ----
+  "Matsya Avatar Vishnu": [[80, 130, 200], [255, 160, 50], [180, 220, 255]], // blue body + golden fish scales + light blue water
+  "Kurma Avatar Vishnu": [[80, 130, 200], [120, 100, 60], [180, 220, 255]], // blue body + brown turtle shell + light blue
+  "Narasimha Avatar Vishnu": [[255, 160, 40], [220, 60, 30], [180, 100, 40]], // golden lion body + red + dark
 };
 
 // ---------------------------------------------------------------------------
