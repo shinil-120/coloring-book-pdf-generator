@@ -257,7 +257,7 @@ export const BOOKS: ColoringBook[] = [
     name: "Indian Mythology and Gods Coloring Book",
     slug: "Indian-Mythology",
     category: "Indian Mythology",
-    description: "44 pages — no covers, no blanks",
+    description: "50 pages — no covers, no blanks",
     items: [
       "Ganesha", "Krishna", "Shiva", "Durga", "Hanuman",
       "Lakshmi", "Saraswati", "Vishnu", "Rama", "Kali",
@@ -270,6 +270,8 @@ export const BOOKS: ColoringBook[] = [
       "Savitri", "Gayatri",
       "Nataraja Shiva", "Ardhanarishvara Shiva", "Bhairava Shiva",
       "Matsya Avatar Vishnu", "Kurma Avatar Vishnu", "Narasimha Avatar Vishnu",
+      "Varaha Avatar Vishnu", "Vamana Avatar Vishnu", "Parashurama Avatar Vishnu",
+      "Mahabali", "Karthikeya on Peacock", "Mohini Avatar Vishnu",
     ],
   },
 ];
@@ -760,6 +762,12 @@ export const NATURAL_PALETTES: Record<string, Palette> = {
   "Matsya Avatar Vishnu": [[80, 130, 200], [255, 160, 50], [180, 220, 255]], // blue body + golden fish scales + light blue water
   "Kurma Avatar Vishnu": [[80, 130, 200], [120, 100, 60], [180, 220, 255]], // blue body + brown turtle shell + light blue
   "Narasimha Avatar Vishnu": [[255, 160, 40], [220, 60, 30], [180, 100, 40]], // golden lion body + red + dark
+  "Varaha Avatar Vishnu": [[80, 130, 200], [120, 80, 50], [180, 220, 255]], // blue body + brown boar + light blue
+  "Vamana Avatar Vishnu": [[80, 130, 200], [255, 180, 40], [180, 220, 255]], // blue dwarf body + gold umbrella + light
+  "Parashurama Avatar Vishnu": [[80, 130, 200], [140, 100, 50], [220, 60, 40]], // blue body + brown axe handle + red axe
+  "Mahabali": [[255, 180, 40], [220, 80, 40], [255, 230, 120]],       // golden crown + red dhoti + light gold
+  "Karthikeya on Peacock": [[220, 80, 40], [40, 120, 100], [255, 180, 50]], // red + peacock teal + gold
+  "Mohini Avatar Vishnu": [[255, 150, 180], [255, 180, 40], [200, 100, 150]], // pink sari + gold ornaments + magenta
 };
 
 // ---------------------------------------------------------------------------
