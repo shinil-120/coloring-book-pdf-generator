@@ -47,6 +47,7 @@ const CATEGORY_SUFFIX: Record<string, string> = {
   Mandala: "mandala",
   "Musical Instruments": "musical instrument",
   "Indian Mythology": "Hindu deity",
+  Food: "food dish",
 };
 
 export function categorySuffix(category: string): string {
@@ -272,6 +273,16 @@ export const BOOKS: ColoringBook[] = [
       "Matsya Avatar Vishnu", "Kurma Avatar Vishnu", "Narasimha Avatar Vishnu",
       "Varaha Avatar Vishnu", "Vamana Avatar Vishnu", "Parashurama Avatar Vishnu",
       "Mahabali", "Karthikeya on Peacock", "Mohini Avatar Vishnu",
+    ],
+  },
+  {
+    name: "Food Coloring Book",
+    slug: "Food",
+    category: "Food",
+    description: "10 pages — no covers, no blanks",
+    items: [
+      "Omelette", "Waffles", "Fried Chicken", "Hot Dog", "Croissant",
+      "Red Velvet Cupcake", "Baklava", "Grilled Bacon", "Fish and Chips", "Samosa",
     ],
   },
 ];
@@ -768,6 +779,18 @@ export const NATURAL_PALETTES: Record<string, Palette> = {
   "Mahabali": [[255, 180, 40], [220, 80, 40], [255, 230, 120]],       // golden crown + red dhoti + light gold
   "Karthikeya on Peacock": [[220, 80, 40], [40, 120, 100], [255, 180, 50]], // red + peacock teal + gold
   "Mohini Avatar Vishnu": [[255, 150, 180], [255, 180, 40], [200, 100, 150]], // pink sari + gold ornaments + magenta
+
+  // ---- Food ----
+  Omelette: [[255, 220, 100], [255, 180, 60], [180, 130, 50]],       // yellow egg + golden edge + brown pan
+  Waffles: [[220, 170, 90], [180, 130, 60], [255, 200, 120]],        // golden waffle + dark squares + light syrup
+  "Fried Chicken": [[220, 160, 80], [180, 120, 50], [240, 200, 140]], // golden crust + dark + light
+  "Hot Dog": [[220, 80, 60], [255, 220, 160], [140, 90, 50]],        // red sausage + bun + dark
+  Croissant: [[230, 190, 120], [190, 150, 80], [245, 220, 170]],     // golden pastry + dark + light
+  "Red Velvet Cupcake": [[180, 50, 60], [255, 240, 240], [255, 180, 200]], // red cake + white frosting + pink
+  Baklava: [[230, 190, 100], [180, 140, 60], [255, 220, 150]],       // golden layers + dark + light honey
+  "Grilled Bacon": [[200, 80, 50], [160, 50, 30], [240, 180, 130]],  // red meat + dark + light fat
+  "Fish and Chips": [[255, 200, 100], [220, 160, 60], [255, 230, 150]], // golden fried fish + dark + light chips
+  Samosa: [[220, 170, 90], [180, 130, 60], [240, 200, 130]],         // golden pastry + dark + light
 };
 
 // ---------------------------------------------------------------------------
@@ -1019,6 +1042,12 @@ const CATEGORY_THEMES: Record<string, CategoryTheme> = {
     badgeBg: "bg-orange-50 border-orange-200",
     badgeText: "text-orange-700",
     emoji: "🪔",
+  },
+  Food: {
+    gradient: "from-rose-400 to-orange-500",
+    badgeBg: "bg-rose-50 border-rose-200",
+    badgeText: "text-rose-700",
+    emoji: "🍳",
   },
 };
 
