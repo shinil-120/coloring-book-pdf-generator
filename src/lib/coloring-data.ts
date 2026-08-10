@@ -257,7 +257,7 @@ export const BOOKS: ColoringBook[] = [
     name: "Indian Mythology and Gods Coloring Book",
     slug: "Indian-Mythology",
     category: "Indian Mythology",
-    description: "30 pages — no covers, no blanks",
+    description: "45 pages — no covers, no blanks",
     items: [
       "Ganesha", "Krishna", "Shiva", "Durga", "Hanuman",
       "Lakshmi", "Saraswati", "Vishnu", "Rama", "Kali",
@@ -265,6 +265,9 @@ export const BOOKS: ColoringBook[] = [
       "Ravana", "Garuda", "Nandi Bull", "Dwarka Temple", "Kailash",
       "Chariot of Sun God", "Trishul", "Lotus Pond Temple", "Diya Lamp", "Om Symbol",
       "Peacock Throne", "Snake God Vasuki", "Goddess Ganga", "Ashoka Tree", "Kalpavriksha Tree",
+      "Indra Deva", "Agni Deva", "Vayu Deva", "Varuna Deva", "Surya Deva",
+      "Chandra Deva", "Yama Deva", "Kubera Deva", "Rudra", "Parvati",
+      "Savitri", "Gayatri", "Tulsi Plant", "Banyan Tree", "Kamadhenu Cow",
     ],
   },
 ];
@@ -728,6 +731,23 @@ export const NATURAL_PALETTES: Record<string, Palette> = {
   "Goddess Ganga": [[100, 160, 220], [60, 120, 180], [180, 220, 250]], // river blue + dark + light
   "Ashoka Tree": [[255, 180, 40], [80, 140, 60], [255, 100, 60]],   // gold flowers + green leaves + orange
   "Kalpavriksha Tree": [[80, 140, 60], [255, 180, 40], [120, 80, 40]], // green leaves + gold fruits + brown trunk
+
+  // ---- Indian Mythology: 15 new items (pages 31-45) ----
+  "Indra Deva": [[255, 180, 40], [80, 130, 200], [220, 80, 40]],     // gold + lightning blue + red
+  "Agni Deva": [[220, 60, 30], [255, 140, 30], [255, 200, 50]],      // red + orange + yellow flames
+  "Vayu Deva": [[150, 200, 230], [100, 160, 200], [200, 230, 250]],  // pale blue + dark + light (wind/sky)
+  "Varuna Deva": [[60, 120, 180], [40, 90, 150], [120, 180, 220]],   // deep blue + dark + light (water)
+  "Surya Deva": [[255, 180, 40], [255, 120, 30], [255, 230, 120]],   // gold sun + orange + light gold
+  "Chandra Deva": [[200, 210, 230], [150, 170, 200], [230, 235, 245]], // pale silver + dark + light (moon)
+  "Yama Deva": [[80, 50, 60], [180, 30, 30], [120, 90, 100]],        // dark + red + grey (death god)
+  "Kubera Deva": [[255, 200, 50], [220, 160, 30], [255, 230, 150]],  // gold + dark gold + light (wealth god)
+  Rudra: [[100, 130, 160], [60, 80, 100], [160, 190, 220]],          // storm blue + dark + light
+  Parvati: [[255, 180, 200], [200, 100, 150], [255, 220, 230]],      // pink + magenta + light pink
+  Savitri: [[255, 200, 80], [220, 140, 40], [255, 230, 150]],        // golden + dark + light (sun goddess)
+  Gayatri: [[255, 255, 255], [255, 180, 40], [200, 220, 240]],       // white sari + gold + pale blue
+  "Tulsi Plant": [[80, 160, 70], [50, 110, 40], [180, 220, 120]],    // green leaves + dark + light
+  "Banyan Tree": [[120, 90, 50], [80, 60, 30], [180, 150, 100]],     // brown trunk + dark + light
+  "Kamadhenu Cow": [[240, 230, 220], [180, 160, 140], [60, 50, 40]], // white body + tan + dark hooves
 };
 
 // ---------------------------------------------------------------------------
@@ -852,12 +872,15 @@ export function getPalette(item: string, category: string): Palette {
 // ---------------------------------------------------------------------------
 // PDF page layout constants (exact spec from requirements).
 // ---------------------------------------------------------------------------
+// KDP minimum margins: 0.4 inches (28.8pt) for top, bottom, and outside.
+// We use 0.4" for the colored reference to maximize space while staying compliant.
 export const PAGE_WIDTH = 612;       // 8.5 inches @ 72dpi
 export const PAGE_HEIGHT = 792;      // 11 inches @ 72dpi
-export const MARGIN = 36;            // 0.5 inches
+export const MARGIN = 36;            // 0.5 inches (general page margin)
+export const KDP_MARGIN = 29;        // 0.4 inches (KDP minimum, 28.8pt rounded)
 export const REF_SIZE = 86;          // colored reference 86×86
-export const REF_X = MARGIN;         // 36
-export const REF_Y = MARGIN;         // 36 (top-left)
+export const REF_X = KDP_MARGIN;     // 29 (0.4" from left — KDP compliant)
+export const REF_Y = KDP_MARGIN;     // 29 (0.4" from top — KDP compliant)
 export const BW_SIZE = 380;          // B&W coloring 380×380
 export const BW_X = (PAGE_WIDTH - BW_SIZE) / 2;  // 116
 export const BW_Y = 132;             // below reference
