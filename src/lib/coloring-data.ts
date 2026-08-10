@@ -46,6 +46,7 @@ const CATEGORY_SUFFIX: Record<string, string> = {
   Birds: "bird",
   Mandala: "mandala",
   "Musical Instruments": "musical instrument",
+  "Indian Mythology": "Hindu deity",
 };
 
 export function categorySuffix(category: string): string {
@@ -250,6 +251,20 @@ export const BOOKS: ColoringBook[] = [
       "Maracas", "Harmonica", "Oboe", "Bassoon", "Tuba",
       "French Horn", "Keyboard", "Ukulele", "Mandolin", "Sitar",
       "Bongos", "Conga", "Triangle", "Castanets", "Didgeridoo",
+    ],
+  },
+  {
+    name: "Indian Mythology and Gods Coloring Book",
+    slug: "Indian-Mythology",
+    category: "Indian Mythology",
+    description: "30 pages — no covers, no blanks",
+    items: [
+      "Ganesha", "Krishna", "Shiva", "Durga", "Hanuman",
+      "Lakshmi", "Saraswati", "Vishnu", "Rama", "Kali",
+      "Brahma", "Kartikeya", "Radha Krishna", "Sita", "Arjuna",
+      "Ravana", "Garuda", "Nandi Bull", "Dwarka Temple", "Kailash",
+      "Chariot of Sun God", "Trishul", "Lotus Pond Temple", "Diya Lamp", "Om Symbol",
+      "Peacock Throne", "Snake God Vasuki", "Goddess Ganga", "Ashoka Tree", "Kalpavriksha Tree",
     ],
   },
 ];
@@ -681,6 +696,38 @@ export const NATURAL_PALETTES: Record<string, Palette> = {
   Triangle: [[200, 200, 210], [160, 160, 175], [240, 240, 250]],    // silver + dark + light
   Castanets: [[160, 100, 50], [120, 80, 40], [200, 160, 100]],      // wood brown + dark + light
   Didgeridoo: [[140, 80, 40], [100, 60, 25], [190, 140, 80]],       // earth brown + dark + light
+
+  // ---- Indian Mythology and Gods ----
+  Ganesha: [[255, 180, 50], [220, 80, 40], [255, 230, 120]],        // golden body + red dhoti + light gold
+  Krishna: [[80, 130, 200], [255, 200, 50], [180, 220, 255]],       // blue skin + yellow dhoti + light blue
+  Shiva: [[80, 140, 180], [255, 255, 255], [180, 80, 60]],          // blue-grey skin + white ash + red tilak
+  Durga: [[220, 50, 60], [255, 180, 40], [160, 30, 30]],            // red sari + gold ornaments + dark red
+  Hanuman: [[200, 140, 60], [220, 60, 40], [255, 200, 100]],        // golden-orange body + red flag + light
+  Lakshmi: [[255, 180, 40], [230, 50, 100], [255, 230, 150]],       // gold sari + pink lotus + light gold
+  Saraswati: [[255, 255, 255], [255, 180, 40], [180, 200, 240]],    // white sari + gold veena + pale blue
+  Vishnu: [[80, 130, 200], [255, 200, 50], [255, 140, 30]],         // blue skin + yellow + orange
+  Rama: [[80, 140, 200], [220, 180, 80], [255, 200, 50]],           // blue skin + golden bow + yellow
+  Kali: [[40, 40, 50], [180, 30, 30], [120, 120, 130]],             // dark skin + red tongue + grey
+  Brahma: [[255, 180, 50], [220, 80, 40], [255, 230, 120]],         // golden body + red + light gold
+  Kartikeya: [[220, 80, 40], [255, 180, 50], [120, 150, 200]],      // red + gold + blue peacock
+  "Radha Krishna": [[80, 130, 200], [255, 150, 180], [255, 200, 50]], // blue Krishna + pink Radha + yellow
+  Sita: [[255, 200, 220], [255, 180, 40], [200, 80, 100]],          // pink sari + gold + dark pink
+  Arjuna: [[180, 130, 60], [220, 60, 40], [255, 200, 100]],         // golden armor + red cape + light
+  Ravana: [[40, 40, 50], [180, 30, 30], [120, 120, 130]],           // dark + red + grey (10 heads)
+  Garuda: [[255, 180, 40], [220, 80, 40], [255, 230, 120]],         // golden eagle + red + light gold
+  "Nandi Bull": [[200, 160, 80], [160, 120, 50], [240, 220, 180]],  // golden bull + dark + light
+  "Dwarka Temple": [[220, 180, 100], [180, 130, 60], [255, 220, 150]], // sandstone + dark + light
+  Kailash: [[180, 200, 220], [120, 140, 170], [220, 230, 245]],     // icy blue mountain + dark + light
+  "Chariot of Sun God": [[255, 180, 40], [220, 80, 40], [255, 230, 120]], // gold sun + red chariot + light
+  Trishul: [[200, 200, 210], [150, 150, 165], [240, 240, 250]],     // silver + dark + light
+  "Lotus Pond Temple": [[220, 100, 150], [80, 160, 80], [255, 230, 150]], // pink lotus + green + gold
+  "Diya Lamp": [[255, 160, 40], [220, 80, 30], [255, 220, 100]],     // flame orange + clay red + light
+  "Om Symbol": [[255, 150, 40], [220, 80, 40], [255, 220, 120]],     // saffron + red + light gold
+  "Peacock Throne": [[40, 120, 100], [255, 180, 50], [80, 50, 120]], // teal + gold + purple
+  "Snake God Vasuki": [[80, 140, 60], [40, 100, 40], [180, 200, 100]], // green snake + dark + light
+  "Goddess Ganga": [[100, 160, 220], [60, 120, 180], [180, 220, 250]], // river blue + dark + light
+  "Ashoka Tree": [[255, 180, 40], [80, 140, 60], [255, 100, 60]],   // gold flowers + green leaves + orange
+  "Kalpavriksha Tree": [[80, 140, 60], [255, 180, 40], [120, 80, 40]], // green leaves + gold fruits + brown trunk
 };
 
 // ---------------------------------------------------------------------------
@@ -923,6 +970,12 @@ const CATEGORY_THEMES: Record<string, CategoryTheme> = {
     badgeBg: "bg-amber-50 border-amber-200",
     badgeText: "text-amber-700",
     emoji: "🎸",
+  },
+  "Indian Mythology": {
+    gradient: "from-orange-400 to-red-500",
+    badgeBg: "bg-orange-50 border-orange-200",
+    badgeText: "text-orange-700",
+    emoji: "🪔",
   },
 };
 
