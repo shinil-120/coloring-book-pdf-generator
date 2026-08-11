@@ -5,13 +5,26 @@
  * CDN URLs. In local development (no BLOB_READ_WRITE_TOKEN), falls back to
  * writing to public/downloads/ (local filesystem).
  */
-import { put, del } from "@vercel/blob";
+import { put, del, head } from "@vercel/blob";
 import fs from "fs";
 import path from "path";
 
 /** Check if Vercel Blob is configured. */
 export function isBlobConfigured(): boolean {
   return !!process.env.BLOB_READ_WRITE_TOKEN;
+}
+
+/** Slugify an item name (e.g. "T-Rex" → "T-Rex", "Hot Air Balloon" → "Hot-Air-Balloon"). */
+export function slugify(s: string): string {
+  return s
+    .replace(/&/g, "and")
+    .replace(/[^a-zA-Z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+/** Build the canonical blob path for a coloring-page image. */
+export function coloringPageKey(slug: string, itemName: string): string {
+  return `coloring-books/${slug}/bw/${slugify(itemName)}.png`;
 }
 
 /**
@@ -105,4 +118,53 @@ export async function readFile(url: string): Promise<Buffer> {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Failed to fetch ${url}: HTTP ${res.status}`);
   return Buffer.from(await res.arrayBuffer());
+}
+
+/**
+ * Upload a generated black-and-white coloring-page image.
+ * Path: `coloring-books/{slug}/bw/{itemSlug}.png` (resumable, allowOverwrite).
+ */
+export async function uploadColoringPage(
+  slug: string,
+  itemName: string,
+  buffer: Buffer
+): Promise<{ url: string; isLocal: boolean; key: string }> {
+  const key = coloringPageKey(slug, itemName);
+  const result = await uploadFile(key, buffer);
+  return { ...result, key };
+}
+
+/**
+ * Check if a coloring-page image already exists in Blob/local storage.
+ * Returns the URL and size in bytes (size = 0 if not found).
+ *
+ * Used for resumable batches: if an image already exists and is bigger
+ * than the 5 KB threshold, the generate endpoint will skip re-generation.
+ */
+export async function coloringPageExists(
+  slug: string,
+  itemName: string
+): Promise<{ exists: boolean; sizeBytes: number; url: string | null }> {
+  const key = coloringPageKey(slug, itemName);
+
+  if (isBlobConfigured()) {
+    try {
+      const blob = await head(key);
+      return { exists: true, sizeBytes: blob.size ?? 0, url: blob.url };
+    } catch {
+      return { exists: false, sizeBytes: 0, url: null };
+    }
+  }
+
+  // Local fallback
+  const localPath = path.join(process.cwd(), "public", "downloads", key);
+  if (fs.existsSync(localPath)) {
+    try {
+      const stat = fs.statSync(localPath);
+      return { exists: true, sizeBytes: stat.size, url: `/downloads/${key}` };
+    } catch {
+      return { exists: false, sizeBytes: 0, url: null };
+    }
+  }
+  return { exists: false, sizeBytes: 0, url: null };
 }

@@ -1,0 +1,995 @@
+     1→     1→"use client";
+     2→     2→
+     3→     3→import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+     4→     4→import { motion, AnimatePresence } from "framer-motion";
+     5→     5→import {
+     6→     6→  Sparkles,
+     7→     7→  Wand2,
+     8→     8→  Download,
+     9→     9→  Trash2,
+    10→    10→  RefreshCw,
+    11→    11→  Copy,
+    12→    12→  Check,
+    13→    13→  ImageIcon,
+    14→    14→  Loader2,
+    15→    15→  AlertCircle,
+    16→    16→  Maximize2,
+    17→    17→  X,
+    18→    18→  ChevronDown,
+    19→    19→  History,
+    20→    20→  Zap,
+    21→    21→  Settings2,
+    22→    22→  Heart,
+    23→    23→  Share2,
+    24→    24→} from "lucide-react";
+    25→    25→import { toast } from "sonner";
+    26→    26→import { Button } from "@/components/ui/button";
+    27→    27→import { Textarea } from "@/components/ui/textarea";
+    28→    28→import { Label } from "@/components/ui/label";
+    29→    29→import { Badge } from "@/components/ui/badge";
+    30→    30→import { Switch } from "@/components/ui/switch";
+    31→    31→import { Input } from "@/components/ui/input";
+    32→    32→import {
+    33→    33→  Dialog,
+    34→    34→  DialogContent,
+    35→    35→  DialogTitle,
+    36→    36→} from "@/components/ui/dialog";
+    37→    37→import {
+    38→    38→  Tooltip,
+    39→    39→  TooltipContent,
+    40→    40→  TooltipProvider,
+    41→    41→  TooltipTrigger,
+    42→    42→} from "@/components/ui/tooltip";
+    43→    43→import { cn } from "@/lib/utils";
+    44→    44→
+    45→    45→// ─────────────────────────────────────────────────────────────────────────
+    46→    46→// Types & constants
+    47→    47→// ─────────────────────────────────────────────────────────────────────────
+    48→    48→
+    49→    49→type ImageSize =
+    50→    50→  | "1024x1024"
+    51→    51→  | "768x1344"
+    52→    52→  | "864x1152"
+    53→    53→  | "1344x768"
+    54→    54→  | "1152x864"
+    55→    55→  | "1440x720"
+    56→    56→  | "720x1440";
+    57→    57→
+    58→    58→interface StylePreset {
+    59→    59→  key: string;
+    60→    60→  label: string;
+    61→    61→  emoji: string;
+    62→    62→  hint: string;
+    63→    63→}
+    64→    64→
+    65→    65→const STYLE_PRESETS: StylePreset[] = [
+    66→    66→  { key: "auto", label: "Auto", emoji: "✨", hint: "No style modifier — let the model decide" },
+    67→    67→  { key: "realistic", label: "Realistic Photo", emoji: "📷", hint: "Photorealistic, studio lighting" },
+    68→    68→  { key: "digital_art", label: "Digital Art", emoji: "🎨", hint: "Concept-art illustration" },
+    69→    69→  { key: "anime", label: "Anime", emoji: "🌸", hint: "Cel-shaded anime style" },
+    70→    70→  { key: "oil", label: "Oil Painting", emoji: "🖼️", hint: "Thick classical brush strokes" },
+    71→    71→  { key: "watercolor", label: "Watercolor", emoji: "💧", hint: "Soft wet-on-wet washes" },
+    72→    72→  { key: "3d", label: "3D Render", emoji: "🧊", hint: "Octane / Blender render" },
+    73→    73→  { key: "minimalist", label: "Minimalist", emoji: "⚪", hint: "Flat, limited palette" },
+    74→    74→  { key: "coloring", label: "Coloring Page", emoji: "🖍️", hint: "B&W line art for kids" },
+    75→    75→  { key: "fantasy", label: "Fantasy Art", emoji: "🐉", hint: "Epic, magical atmosphere" },
+    76→    76→  { key: "cyberpunk", label: "Cyberpunk", emoji: "🌃", hint: "Neon, futuristic city" },
+    77→    77→];
+    78→    78→
+    79→    79→const SIZES: { value: ImageSize; label: string; ratio: string; popular?: boolean }[] = [
+    80→    80→  { value: "1024x1024", label: "Square", ratio: "1:1", popular: true },
+    81→    81→  { value: "1344x768", label: "Landscape", ratio: "16:9", popular: true },
+    82→    82→  { value: "768x1344", label: "Portrait", ratio: "9:16", popular: true },
+    83→    83→  { value: "1440x720", label: "Wide", ratio: "2:1" },
+    84→    84→  { value: "720x1440", label: "Tall", ratio: "1:2" },
+    85→    85→  { value: "1152x864", label: "Std Landscape", ratio: "4:3" },
+    86→    86→  { value: "864x1152", label: "Std Portrait", ratio: "3:4" },
+    87→    87→];
+    88→    88→
+    89→    89→const PROMPT_IDEAS: { label: string; prompt: string; emoji: string }[] = [
+    90→    90→  { emoji: "🦊", label: "Cute fox in autumn forest", prompt: "A cute baby fox sitting on a mossy log in an autumn forest, golden hour sunlight filtering through orange leaves, soft bokeh background, ultra detailed fur" },
+    91→    91→  { emoji: "🐉", label: "Majestic dragon", prompt: "A majestic dragon perched on a mountain peak at sunset, scales shimmering with iridescent colors, vast valley below with rivers and forests, epic cinematic composition" },
+    92→    92→  { emoji: "🌊", label: "Underwater coral reef", prompt: "Vibrant underwater coral reef teeming with tropical fish, sunbeams piercing through crystal-clear turquoise water, sea turtles gliding, ultra detailed marine life" },
+    93→    93→  { emoji: "🏯", label: "Japanese pagoda at dawn", prompt: "A traditional Japanese pagoda at dawn, cherry blossoms drifting in the wind, mist rising from a koi pond, soft pink and gold color palette, serene atmosphere" },
+    94→    94→  { emoji: "🚀", label: "Rocket launch at night", prompt: "A massive rocket launching into a starry night sky, fiery exhaust illuminating the launch pad, dramatic clouds of smoke, cinematic wide shot, ultra detailed" },
+    95→    95→  { emoji: "🦄", label: "Magical unicorn", prompt: "A magical unicorn with a flowing rainbow mane galloping through a field of glowing wildflowers under a starry twilight sky, sparkles and stardust trailing behind" },
+    96→    96→  { emoji: "🏙️", label: "Cyberpunk city street", prompt: "A rain-soaked cyberpunk city street at night, neon signs in pink and cyan reflecting in puddles, flying cars overhead, atmospheric fog, blade runner aesthetic" },
+    97→    97→  { emoji: "🍰", label: "Fancy dessert plate", prompt: "An elegant dessert plate with a delicate chocolate lava cake, fresh raspberries, mint leaves, and a drizzle of caramel sauce, professional food photography, soft studio lighting" },
+    98→    98→];
+    99→    99→
+   100→   100→interface GeneratedImage {
+   101→   101→  id: string;
+   102→   102→  image: string; // data-uri
+   103→   103→  prompt: string;
+   104→   104→  size: ImageSize;
+   105→   105→  style: string;
+   106→   106→  styleLabel: string;
+   107→   107→  seed: number;
+   108→   108→  bytes: number;
+   109→   109→  generatedAt: string;
+   110→   110→  favorite?: boolean;
+   111→   111→}
+   112→   112→
+   113→   113→const HISTORY_KEY = "zai-image-gen-history-v1";
+   114→   114→const MAX_HISTORY = 50;
+   115→   115→
+   116→   116→// ─────────────────────────────────────────────────────────────────────────
+   117→   117→// Helpers
+   118→   118→// ─────────────────────────────────────────────────────────────────────────
+   119→   119→
+   120→   120→function loadHistory(): GeneratedImage[] {
+   121→   121→  if (typeof window === "undefined") return [];
+   122→   122→  try {
+   123→   123→    const raw = window.localStorage.getItem(HISTORY_KEY);
+   124→   124→    if (!raw) return [];
+   125→   125→    const parsed = JSON.parse(raw);
+   126→   126→    if (!Array.isArray(parsed)) return [];
+   127→   127→    return parsed as GeneratedImage[];
+   128→   128→  } catch {
+   129→   129→    return [];
+   130→   130→  }
+   131→   131→}
+   132→   132→
+   133→   133→function saveHistory(items: GeneratedImage[]) {
+   134→   134→  if (typeof window === "undefined") return;
+   135→   135→  try {
+   136→   136→    // Cap to MAX_HISTORY to avoid blowing the localStorage quota.
+   137→   137→    // (Each PNG data-uri can be ~1-2 MB; with 50 items we may still hit quota —
+   138→   138→    //  in that case we drop the oldest until it fits.)
+   139→   139→    let capped = items.slice(0, MAX_HISTORY);
+   140→   140→    while (capped.length > 0) {
+   141→   141→      try {
+   142→   142→        window.localStorage.setItem(HISTORY_KEY, JSON.stringify(capped));
+   143→   143→        return;
+   144→   144→      } catch {
+   145→   145→        // Quota exceeded — drop the oldest and retry.
+   146→   146→        capped = capped.slice(0, capped.length - 1);
+   147→   147→      }
+   148→   148→    }
+   149→   149→  } catch {
+   150→   150→    /* noop */
+   151→   151→  }
+   152→   152→}
+   153→   153→
+   154→   154→function downloadDataUri(dataUri: string, filename: string) {
+   155→   155→  const a = document.createElement("a");
+   156→   156→  a.href = dataUri;
+   157→   157→  a.download = filename;
+   158→   158→  document.body.appendChild(a);
+   159→   159→  a.click();
+   160→   160→  document.body.removeChild(a);
+   161→   161→}
+   162→   162→
+   163→   163→function formatBytes(b: number): string {
+   164→   164→  if (b < 1024) return `${b} B`;
+   165→   165→  if (b < 1024 * 1024) return `${(b / 1024).toFixed(1)} KB`;
+   166→   166→  return `${(b / (1024 * 1024)).toFixed(2)} MB`;
+   167→   167→}
+   168→   168→
+   169→   169→function aspectRatioClass(size: ImageSize): string {
+   170→   170→  switch (size) {
+   171→   171→    case "1024x1024": return "aspect-square";
+   172→   172→    case "768x1344":
+   173→   173→    case "720x1440": return "aspect-[9/16]";
+   174→   174→    case "864x1152": return "aspect-[3/4]";
+   175→   175→    case "1344x768":
+   176→   176→    case "1440x720": return "aspect-video";
+   177→   177→    case "1152x864": return "aspect-[4/3]";
+   178→   178→    default: return "aspect-square";
+   179→   179→  }
+   180→   180→}
+   181→   181→
+   182→   182→// ─────────────────────────────────────────────────────────────────────────
+   183→   183→// Component
+   184→   184→// ─────────────────────────────────────────────────────────────────────────
+   185→   185→
+   186→   186→export function ImageGenerator() {
+   187→   187→  const [prompt, setPrompt] = useState("");
+   188→   188→  const [negativePrompt, setNegativePrompt] = useState("");
+   189→   189→  const [size, setSize] = useState<ImageSize>("1024x1024");
+   190→   190→  const [style, setStyle] = useState<string>("auto");
+   191→   191→  const [enhance, setEnhance] = useState(true);
+   192→   192→  const [showAdvanced, setShowAdvanced] = useState(false);
+   193→   193→
+   194→   194→  const [loading, setLoading] = useState(false);
+   195→   195→  const [error, setError] = useState<string | null>(null);
+   196→   196→  const [current, setCurrent] = useState<GeneratedImage | null>(null);
+   197→   197→  const [history, setHistory] = useState<GeneratedImage[]>([]);
+   198→   198→  const [previewOpen, setPreviewOpen] = useState(false);
+   199→   199→  const [previewItem, setPreviewItem] = useState<GeneratedImage | null>(null);
+   200→   200→  const [copiedId, setCopiedId] = useState<string | null>(null);
+   201→   201→
+   202→   202→  // ref so we can abort an in-flight request if the user clicks again
+   203→   203→  const abortRef = useRef<AbortController | null>(null);
+   204→   204→
+   205→   205→  // Load history on mount
+   206→   206→  useEffect(() => {
+   207→   207→    setHistory(loadHistory());
+   208→   208→  }, []);
+   209→   209→
+   210→   210→  // Persist history to localStorage whenever it changes
+   211→   211→  useEffect(() => {
+   212→   212→    saveHistory(history);
+   213→   213→  }, [history]);
+   214→   214→
+   215→   215→  const canGenerate = prompt.trim().length > 0 && !loading;
+   216→   216→
+   217→   217→  const handleGenerate = useCallback(async () => {
+   218→   218→    const trimmed = prompt.trim();
+   219→   219→    if (!trimmed) {
+   220→   220→      toast.error("Please enter a prompt first");
+   221→   221→      return;
+   222→   222→    }
+   223→   223→
+   224→   224→    // Abort any previous in-flight request
+   225→   225→    if (abortRef.current) abortRef.current.abort();
+   226→   226→    const controller = new AbortController();
+   227→   227→    abortRef.current = controller;
+   228→   228→
+   229→   229→    setLoading(true);
+   230→   230→    setError(null);
+   231→   231→
+   232→   232→    try {
+   233→   233→      const res = await fetch("/api/generate-image", {
+   234→   234→        method: "POST",
+   235→   235→        headers: { "Content-Type": "application/json" },
+   236→   236→        body: JSON.stringify({
+   237→   237→          prompt: trimmed,
+   238→   238→          size,
+   239→   239→          style,
+   240→   240→          negativePrompt: negativePrompt.trim() || undefined,
+   241→   241→          enhance,
+   242→   242→        }),
+   243→   243→        signal: controller.signal,
+   244→   244→      });
+   245→   245→
+   246→   246→      const data = await res.json();
+   247→   247→      if (!res.ok || !data.success) {
+   248→   248→        throw new Error(data?.error || `HTTP ${res.status}`);
+   249→   249→      }
+   250→   250→
+   251→   251→      const item: GeneratedImage = {
+   252→   252→        id: `img-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+   253→   253→        image: data.image,
+   254→   254→        prompt: data.prompt,
+   255→   255→        size: data.size,
+   256→   256→        style: data.style,
+   257→   257→        styleLabel: data.styleLabel,
+   258→   258→        seed: data.seed,
+   259→   259→        bytes: data.bytes,
+   260→   260→        generatedAt: data.generatedAt,
+   261→   261→      };
+   262→   262→
+   263→   263→      setCurrent(item);
+   264→   264→      setHistory((prev) => [item, ...prev].slice(0, MAX_HISTORY));
+   265→   265→      toast.success("Image generated!", {
+   266→   266→        description: `${data.size} · ${data.styleLabel} · ${formatBytes(data.bytes)}`,
+   267→   267→      });
+   268→   268→    } catch (err) {
+   269→   269→      if (err instanceof DOMException && err.name === "AbortError") return;
+   270→   270→      const msg = err instanceof Error ? err.message : String(err);
+   271→   271→      setError(msg);
+   272→   272→      toast.error("Generation failed", { description: msg.slice(0, 200) });
+   273→   273→    } finally {
+   274→   274→      setLoading(false);
+   275→   275→      abortRef.current = null;
+   276→   276→    }
+   277→   277→  }, [prompt, size, style, negativePrompt, enhance]);
+   278→   278→
+   279→   279→  const handleRegenerate = useCallback(() => {
+   280→   280→    if (!current) return;
+   281→   281→    setPrompt(current.prompt);
+   282→   282→    setSize(current.size);
+   283→   283→    setStyle(current.style);
+   284→   284→    // Defer to next tick so state updates before generate reads them
+   285→   285→    setTimeout(() => handleGenerate(), 0);
+   286→   286→  }, [current, handleGenerate]);
+   287→   287→
+   288→   288→  const handleDownload = useCallback((item: GeneratedImage) => {
+   289→   289→    const slug = item.prompt
+   290→   290→      .toLowerCase()
+   291→   291→      .replace(/[^a-z0-9]+/g, "-")
+   292→   292→      .replace(/^-+|-+$/g, "")
+   293→   293→      .slice(0, 40) || "image";
+   294→   294→    const filename = `${slug}-${item.size}-${item.seed}.png`;
+   295→   295→    downloadDataUri(item.image, filename);
+   296→   296→    toast.success("Downloaded", { description: filename });
+   297→   297→  }, []);
+   298→   298→
+   299→   299→  const handleCopyPrompt = useCallback(async (item: GeneratedImage) => {
+   300→   300→    try {
+   301→   301→      await navigator.clipboard.writeText(item.prompt);
+   302→   302→      setCopiedId(item.id);
+   303→   303→      setTimeout(() => setCopiedId(null), 1500);
+   304→   304→      toast.success("Prompt copied to clipboard");
+   305→   305→    } catch {
+   306→   306→      toast.error("Could not copy to clipboard");
+   307→   307→    }
+   308→   308→  }, []);
+   309→   309→
+   310→   310→  const handleToggleFavorite = useCallback((id: string) => {
+   311→   311→    setHistory((prev) =>
+   312→   312→      prev.map((it) => (it.id === id ? { ...it, favorite: !it.favorite } : it))
+   313→   313→    );
+   314→   314→  }, []);
+   315→   315→
+   316→   316→  const handleDelete = useCallback((id: string) => {
+   317→   317→    setHistory((prev) => prev.filter((it) => it.id !== id));
+   318→   318→    setCurrent((cur) => (cur?.id === id ? null : cur));
+   319→   319→  }, []);
+   320→   320→
+   321→   321→  const handleClearHistory = useCallback(() => {
+   322→   322→    if (history.length === 0) return;
+   323→   323→    if (!confirm(`Delete all ${history.length} generated images from history? This cannot be undone.`)) return;
+   324→   324→    setHistory([]);
+   325→   325→    setCurrent(null);
+   326→   326→    toast.success("History cleared");
+   327→   327→  }, [history.length]);
+   328→   328→
+   329→   329→  const handleUseIdea = useCallback((ideaPrompt: string) => {
+   330→   330→    setPrompt(ideaPrompt);
+   331→   331→    toast.info("Prompt loaded — press Generate to create");
+   332→   332→  }, []);
+   333→   333→
+   334→   334→  const handleShare = useCallback(async (item: GeneratedImage) => {
+   335→   335→    try {
+   336→   336→      if (navigator.share) {
+   337→   337→        // Web Share API (mobile) — share the image as a file
+   338→   338→        const res = await fetch(item.image);
+   339→   339→        const blob = await res.blob();
+   340→   340→        const file = new File([blob], `ai-image-${item.seed}.png`, { type: "image/png" });
+   341→   341→        await navigator.share({
+   342→   342→          title: "AI Generated Image",
+   343→   343→          text: item.prompt,
+   344→   344→          files: [file],
+   345→   345→        });
+   346→   346→        return;
+   347→   347→      }
+   348→   348→      // Desktop fallback — copy prompt to clipboard
+   349→   349→      await navigator.clipboard.writeText(item.prompt);
+   350→   350→      toast.success("Prompt copied (Web Share not supported here)");
+   351→   351→    } catch (err) {
+   352→   352→      if (err instanceof DOMException && err.name === "AbortError") return;
+   353→   353→      toast.error("Could not share");
+   354→   354→    }
+   355→   355→  }, []);
+   356→   356→
+   357→   357→  const promptCount = prompt.length;
+   358→   358→  const promptWarn = promptCount > 1800;
+   359→   359→
+   360→   360→  // Group history by date for nicer display
+   361→   361→  const groupedHistory = useMemo(() => {
+   362→   362→    const groups: Record<string, GeneratedImage[]> = {};
+   363→   363→    for (const item of history) {
+   364→   364→      const date = new Date(item.generatedAt).toLocaleDateString(undefined, {
+   365→   365→        weekday: "long",
+   366→   366→        year: "numeric",
+   367→   367→        month: "long",
+   368→   368→        day: "numeric",
+   369→   369→      });
+   370→   370→      if (!groups[date]) groups[date] = [];
+   371→   371→      groups[date].push(item);
+   372→   372→    }
+   373→   373→    return Object.entries(groups);
+   374→   374→  }, [history]);
+   375→   375→
+   376→   376→  // ─────────────────────────────────────────────────────────────────────
+   377→   377→  return (
+   378→   378→    <TooltipProvider delayDuration={300}>
+   379→   379→      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
+   380→   380→        {/* ══════════════════ LEFT: Controls ══════════════════ */}
+   381→   381→        <motion.div
+   382→   382→          initial={{ opacity: 0, y: 12 }}
+   383→   383→          animate={{ opacity: 1, y: 0 }}
+   384→   384→          transition={{ duration: 0.3 }}
+   385→   385→          className="space-y-5"
+   386→   386→        >
+   387→   387→          {/* Hero */}
+   388→   388→          <div className="relative overflow-hidden rounded-3xl border border-amber-200/70 bg-gradient-to-br from-amber-50 via-orange-50 to-rose-50 p-5 shadow-sm">
+   389→   389→            <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-gradient-to-br from-orange-200/40 to-rose-200/40 blur-2xl" />
+   390→   390→            <div className="relative flex items-start gap-4">
+   391→   391→              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-400 via-rose-400 to-pink-500 shadow-lg shadow-rose-200">
+   392→   392→                <Wand2 className="h-6 w-6 text-white" strokeWidth={2.2} />
+   393→   393→              </div>
+   394→   394→              <div className="min-w-0">
+   395→   395→                <h2 className="text-lg font-extrabold tracking-tight text-stone-800">
+   396→   396→                  AI Image Generator
+   397→   397→                </h2>
+   398→   398→                <p className="mt-0.5 text-sm leading-snug text-stone-600">
+   399→   399→                  Powered by the same z-ai-web-dev-sdk engine that draws your coloring
+   400→   400→                  books — 1024×1024 default, photorealistic quality.
+   401→   401→                </p>
+   402→   402→                <div className="mt-2 flex flex-wrap gap-1.5">
+   403→   403→                  <Badge variant="secondary" className="bg-white/70 text-amber-700 hover:bg-white/70">
+   404→   404→                    <Sparkles className="mr-1 h-3 w-3" /> 1024×1024 default
+   405→   405→                  </Badge>
+   406→   406→                  <Badge variant="secondary" className="bg-white/70 text-rose-700 hover:bg-white/70">
+   407→   407→                    10 style presets
+   408→   408→                  </Badge>
+   409→   409→                  <Badge variant="secondary" className="bg-white/70 text-orange-700 hover:bg-white/70">
+   410→   410→                    Saved locally
+   411→   411→                  </Badge>
+   412→   412→                </div>
+   413→   413→              </div>
+   414→   414→            </div>
+   415→   415→          </div>
+   416→   416→
+   417→   417→          {/* Prompt */}
+   418→   418→          <div className="rounded-3xl border border-stone-200 bg-white p-5 shadow-sm">
+   419→   419→            <div className="mb-2 flex items-center justify-between">
+   420→   420→              <Label htmlFor="prompt" className="text-sm font-bold text-stone-700">
+   421→   421→                Your prompt
+   422→   422→              </Label>
+   423→   423→              <span
+   424→   424→                className={cn(
+   425→   425→                  "text-xs font-semibold tabular-nums",
+   426→   426→                  promptWarn ? "text-rose-600" : "text-stone-400"
+   427→   427→                )}
+   428→   428→              >
+   429→   429→                {promptCount}/2000
+   430→   430→              </span>
+   431→   431→            </div>
+   432→   432→            <Textarea
+   433→   433→              id="prompt"
+   434→   434→              value={prompt}
+   435→   435→              onChange={(e) => setPrompt(e.target.value)}
+   436→   436→              placeholder="A serene mountain landscape at golden hour with misty valleys, dramatic clouds, and a winding river…"
+   437→   437→              className="min-h-[120px] resize-y border-stone-200 bg-stone-50/50 text-sm leading-relaxed focus-visible:ring-amber-400"
+   438→   438→              onKeyDown={(e) => {
+   439→   439→                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+   440→   440→                  e.preventDefault();
+   441→   441→                  handleGenerate();
+   442→   442→                }
+   443→   443→              }}
+   444→   444→            />
+   445→   445→            <p className="mt-1.5 text-[11px] text-stone-400">
+   446→   446→              Tip: press <kbd className="rounded bg-stone-100 px-1 py-0.5 text-[10px] font-semibold">⌘/Ctrl</kbd> + <kbd className="rounded bg-stone-100 px-1 py-0.5 text-[10px] font-semibold">Enter</kbd> to generate
+   447→   447→            </p>
+   448→   448→
+   449→   449→            {/* Style presets */}
+   450→   450→            <div className="mt-4">
+   451→   451→              <Label className="mb-2 block text-sm font-bold text-stone-700">
+   452→   452→                Style preset
+   453→   453→              </Label>
+   454→   454→              <div className="flex flex-wrap gap-1.5">
+   455→   455→                {STYLE_PRESETS.map((s) => (
+   456→   456→                  <Tooltip key={s.key}>
+   457→   457→                    <TooltipTrigger asChild>
+   458→   458→                      <button
+   459→   459→                        type="button"
+   460→   460→                        onClick={() => setStyle(s.key)}
+   461→   461→                        className={cn(
+   462→   462→                          "inline-flex items-center gap-1 rounded-full border px-3 py-1.5 text-xs font-semibold transition-all",
+   463→   463→                          style === s.key
+   464→   464→                            ? "border-transparent bg-gradient-to-r from-rose-500 to-orange-500 text-white shadow-md shadow-rose-200"
+   465→   465→                            : "border-stone-200 bg-white text-stone-600 hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700"
+   466→   466→                        )}
+   467→   467→                      >
+   468→   468→                        <span>{s.emoji}</span>
+   469→   469→                        {s.label}
+   470→   470→                      </button>
+   471→   471→                    </TooltipTrigger>
+   472→   472→                    <TooltipContent>{s.hint}</TooltipContent>
+   473→   473→                  </Tooltip>
+   474→   474→                ))}
+   475→   475→              </div>
+   476→   476→            </div>
+   477→   477→
+   478→   478→            {/* Size selector */}
+   479→   479→            <div className="mt-4">
+   480→   480→              <Label className="mb-2 block text-sm font-bold text-stone-700">
+   481→   481→                Image size
+   482→   482→              </Label>
+   483→   483→              <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-3">
+   484→   484→                {SIZES.map((s) => (
+   485→   485→                  <button
+   486→   486→                    key={s.value}
+   487→   487→                    type="button"
+   488→   488→                    onClick={() => setSize(s.value)}
+   489→   489→                    className={cn(
+   490→   490→                      "group relative flex flex-col items-start gap-0.5 rounded-xl border px-3 py-2 text-left transition-all",
+   491→   491→                      size === s.value
+   492→   492→                        ? "border-transparent bg-gradient-to-br from-stone-800 to-stone-700 text-white shadow-md"
+   493→   493→                        : "border-stone-200 bg-white text-stone-600 hover:border-stone-300 hover:bg-stone-50"
+   494→   494→                    )}
+   495→   495→                  >
+   496→   496→                    <span className="text-xs font-bold">{s.label}</span>
+   497→   497→                    <span className={cn(
+   498→   498→                      "text-[10px] font-medium tabular-nums",
+   499→   499→                      size === s.value ? "text-stone-300" : "text-stone-400"
+   500→   500→                    )}>
+   501→   501→                      {s.value} · {s.ratio}
+   502→   502→                    </span>
+   503→   503→                    {s.popular && (
+   504→   504→                      <span className={cn(
+   505→   505→                        "absolute right-1.5 top-1.5 rounded-full px-1.5 py-0.5 text-[8px] font-bold uppercase",
+   506→   506→                        size === s.value ? "bg-white/20 text-white" : "bg-amber-100 text-amber-700"
+   507→   507→                      )}>
+   508→   508→                        Popular
+   509→   509→                      </span>
+   510→   510→                    )}
+   511→   511→                  </button>
+   512→   512→                ))}
+   513→   513→              </div>
+   514→   514→            </div>
+   515→   515→
+   516→   516→            {/* Advanced toggle */}
+   517→   517→            <button
+   518→   518→              type="button"
+   519→   519→              onClick={() => setShowAdvanced((v) => !v)}
+   520→   520→              className="mt-4 inline-flex items-center gap-1.5 text-xs font-bold text-stone-500 transition-colors hover:text-stone-700"
+   521→   521→            >
+   522→   522→              <Settings2 className="h-3.5 w-3.5" />
+   523→   523→              Advanced settings
+   524→   524→              <ChevronDown
+   525→   525→                className={cn("h-3.5 w-3.5 transition-transform", showAdvanced && "rotate-180")}
+   526→   526→              />
+   527→   527→            </button>
+   528→   528→
+   529→   529→            <AnimatePresence initial={false}>
+   530→   530→              {showAdvanced && (
+   531→   531→                <motion.div
+   532→   532→                  initial={{ height: 0, opacity: 0 }}
+   533→   533→                  animate={{ height: "auto", opacity: 1 }}
+   534→   534→                  exit={{ height: 0, opacity: 0 }}
+   535→   535→                  transition={{ duration: 0.2 }}
+   536→   536→                  className="overflow-hidden"
+   537→   537→                >
+   538→   538→                  <div className="mt-3 space-y-3 rounded-2xl bg-stone-50/80 p-3">
+   539→   539→                    <div>
+   540→   540→                      <Label htmlFor="neg-prompt" className="text-xs font-bold text-stone-600">
+   541→   541→                        Negative prompt (what to avoid)
+   542→   542→                      </Label>
+   543→   543→                      <Input
+   544→   544→                        id="neg-prompt"
+   545→   545→                        value={negativePrompt}
+   546→   546→                        onChange={(e) => setNegativePrompt(e.target.value)}
+   547→   547→                        placeholder="blurry, low quality, distorted, watermark, text"
+   548→   548→                        className="mt-1 border-stone-200 bg-white text-xs"
+   549→   549→                      />
+   550→   550→                    </div>
+   551→   551→                    <div className="flex items-center justify-between rounded-xl bg-white p-3">
+   552→   552→                      <div>
+   553→   553→                        <p className="text-xs font-bold text-stone-700">Quality booster</p>
+   554→   554→                        <p className="text-[11px] text-stone-500">
+   555→   555→                          Prepends “masterpiece, best quality, ultra detailed”
+   556→   556→                        </p>
+   557→   557→                      </div>
+   558→   558→                      <Switch checked={enhance} onCheckedChange={setEnhance} />
+   559→   559→                    </div>
+   560→   560→                  </div>
+   561→   561→                </motion.div>
+   562→   562→              )}
+   563→   563→            </AnimatePresence>
+   564→   564→
+   565→   565→            {/* Generate button */}
+   566→   566→            <Button
+   567→   567→              onClick={handleGenerate}
+   568→   568→              disabled={!canGenerate}
+   569→   569→              className="mt-4 h-12 w-full gap-2 rounded-2xl bg-gradient-to-r from-rose-500 via-orange-500 to-amber-500 text-base font-bold shadow-lg shadow-orange-200 transition-all hover:shadow-xl hover:shadow-orange-300 disabled:cursor-not-allowed disabled:opacity-50"
+   570→   570→            >
+   571→   571→              {loading ? (
+   572→   572→                <>
+   573→   573→                  <Loader2 className="h-5 w-5 animate-spin" />
+   574→   574→                  Generating…
+   575→   575→                </>
+   576→   576→              ) : (
+   577→   577→                <>
+   578→   578→                  <Wand2 className="h-5 w-5" />
+   579→   579→                  Generate Image
+   580→   580→                </>
+   581→   581→              )}
+   582→   582→            </Button>
+   583→   583→          </div>
+   584→   584→
+   585→   585→          {/* Prompt ideas */}
+   586→   586→          <div className="rounded-3xl border border-stone-200 bg-white p-5 shadow-sm">
+   587→   587→            <div className="mb-3 flex items-center gap-2">
+   588→   588→              <Zap className="h-4 w-4 text-amber-500" />
+   589→   589→              <h3 className="text-sm font-bold text-stone-700">Need inspiration?</h3>
+   590→   590→            </div>
+   591→   591→            <div className="flex flex-wrap gap-1.5">
+   592→   592→              {PROMPT_IDEAS.map((idea) => (
+   593→   593→                <button
+   594→   594→                  key={idea.label}
+   595→   595→                  type="button"
+   596→   596→                  onClick={() => handleUseIdea(idea.prompt)}
+   597→   597→                  className="inline-flex items-center gap-1.5 rounded-full border border-stone-200 bg-stone-50 px-3 py-1.5 text-xs font-medium text-stone-600 transition-all hover:border-amber-300 hover:bg-amber-50 hover:text-amber-700"
+   598→   598→                >
+   599→   599→                  <span>{idea.emoji}</span>
+   600→   600→                  {idea.label}
+   601→   601→                </button>
+   602→   602→              ))}
+   603→   603→            </div>
+   604→   604→          </div>
+   605→   605→        </motion.div>
+   606→   606→
+   607→   607→        {/* ══════════════════ RIGHT: Output ══════════════════ */}
+   608→   608→        <motion.div
+   609→   609→          initial={{ opacity: 0, y: 12 }}
+   610→   610→          animate={{ opacity: 1, y: 0 }}
+   611→   611→          transition={{ duration: 0.3, delay: 0.05 }}
+   612→   612→          className="space-y-5"
+   613→   613→        >
+   614→   614→          {/* Current image */}
+   615→   615→          <div className="rounded-3xl border border-stone-200 bg-white p-5 shadow-sm">
+   616→   616→            <div className="mb-3 flex items-center justify-between">
+   617→   617→              <h3 className="text-sm font-bold text-stone-700">Latest result</h3>
+   618→   618→              {current && (
+   619→   619→                <Badge variant="secondary" className="bg-stone-100 text-stone-600">
+   620→   620→                  {current.size} · {formatBytes(current.bytes)}
+   621→   621→                </Badge>
+   622→   622→              )}
+   623→   623→            </div>
+   624→   624→
+   625→   625→            <AnimatePresence mode="wait">
+   626→   626→              {error && (
+   627→   627→                <motion.div
+   628→   628→                  key="error"
+   629→   629→                  initial={{ opacity: 0 }}
+   630→   630→                  animate={{ opacity: 1 }}
+   631→   631→                  exit={{ opacity: 0 }}
+   632→   632→                  className="flex flex-col items-center justify-center gap-3 rounded-2xl border border-rose-200 bg-rose-50 p-8 text-center"
+   633→   633→                >
+   634→   634→                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-rose-100">
+   635→   635→                    <AlertCircle className="h-6 w-6 text-rose-600" />
+   636→   636→                  </div>
+   637→   637→                  <p className="text-sm font-semibold text-rose-700">Generation failed</p>
+   638→   638→                  <p className="max-w-md text-xs text-rose-600">{error}</p>
+   639→   639→                  <Button
+   640→   640→                    size="sm"
+   641→   641→                    variant="outline"
+   642→   642→                    onClick={handleGenerate}
+   643→   643→                    className="border-rose-200 text-rose-700 hover:bg-rose-100"
+   644→   644→                  >
+   645→   645→                    <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+   646→   646→                    Retry
+   647→   647→                  </Button>
+   648→   648→                </motion.div>
+   649→   649→              )}
+   650→   650→
+   651→   651→              {!error && loading && (
+   652→   652→                <motion.div
+   653→   653→                  key="loading"
+   654→   654→                  initial={{ opacity: 0 }}
+   655→   655→                  animate={{ opacity: 1 }}
+   656→   656→                  exit={{ opacity: 0 }}
+   657→   657→                  className={cn(
+   658→   658→                    "relative flex items-center justify-center overflow-hidden rounded-2xl border border-stone-200 bg-gradient-to-br from-stone-50 to-stone-100",
+   659→   659→                    aspectRatioClass(size)
+   660→   660→                  )}
+   661→   661→                >
+   662→   662→                  {/* Animated shimmer */}
+   663→   663→                  <div className="absolute inset-0 animate-pulse bg-gradient-to-r from-transparent via-white/60 to-transparent" />
+   664→   664→                  <div className="z-10 flex flex-col items-center gap-3">
+   665→   665→                    <Loader2 className="h-10 w-10 animate-spin text-rose-500" />
+   666→   666→                    <p className="text-xs font-semibold text-stone-500">
+   667→   667→                      Painting your image…
+   668→   668→                    </p>
+   669→   669→                    <p className="text-[10px] text-stone-400">Usually takes 5–15 seconds</p>
+   670→   670→                  </div>
+   671→   671→                </motion.div>
+   672→   672→              )}
+   673→   673→
+   674→   674→              {!error && !loading && current && (
+   675→   675→                <motion.div
+   676→   676→                  key={current.id}
+   677→   677→                  initial={{ opacity: 0, scale: 0.97 }}
+   678→   678→                  animate={{ opacity: 1, scale: 1 }}
+   679→   679→                  exit={{ opacity: 0 }}
+   680→   680→                  transition={{ duration: 0.25 }}
+   681→   681→                  className="space-y-3"
+   682→   682→                >
+   683→   683→                  <div className="group relative overflow-hidden rounded-2xl border border-stone-200 bg-stone-50">
+   684→   684→                    <div className={cn("w-full", aspectRatioClass(current.size))}>
+   685→   685→                      { }
+   686→   686→                      <img
+   687→   687→                        src={current.image}
+   688→   688→                        alt={current.prompt}
+   689→   689→                        className="h-full w-full object-contain"
+   690→   690→                      />
+   691→   691→                    </div>
+   692→   692→                    <button
+   693→   693→                      type="button"
+   694→   694→                      onClick={() => {
+   695→   695→                        setPreviewItem(current);
+   696→   696→                        setPreviewOpen(true);
+   697→   697→                      }}
+   698→   698→                      className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-lg bg-black/60 text-white opacity-0 backdrop-blur-sm transition-opacity group-hover:opacity-100"
+   699→   699→                      aria-label="View full size"
+   700→   700→                    >
+   701→   701→                      <Maximize2 className="h-4 w-4" />
+   702→   702→                    </button>
+   703→   703→                  </div>
+   704→   704→
+   705→   705→                  {/* Action bar */}
+   706→   706→                  <div className="flex flex-wrap gap-2">
+   707→   707→                    <Button
+   708→   708→                      size="sm"
+   709→   709→                      onClick={() => handleDownload(current)}
+   710→   710→                      className="gap-1.5 bg-stone-800 hover:bg-stone-700"
+   711→   711→                    >
+   712→   712→                      <Download className="h-3.5 w-3.5" />
+   713→   713→                      Download
+   714→   714→                    </Button>
+   715→   715→                    <Button
+   716→   716→                      size="sm"
+   717→   717→                      variant="outline"
+   718→   718→                      onClick={handleRegenerate}
+   719→   719→                      className="gap-1.5"
+   720→   720→                    >
+   721→   721→                      <RefreshCw className="h-3.5 w-3.5" />
+   722→   722→                      Regenerate
+   723→   723→                    </Button>
+   724→   724→                    <Button
+   725→   725→                      size="sm"
+   726→   726→                      variant="outline"
+   727→   727→                      onClick={() => handleCopyPrompt(current)}
+   728→   728→                      className="gap-1.5"
+   729→   729→                    >
+   730→   730→                      {copiedId === current.id ? (
+   731→   731→                        <>
+   732→   732→                          <Check className="h-3.5 w-3.5 text-emerald-600" />
+   733→   733→                          Copied
+   734→   734→                        </>
+   735→   735→                      ) : (
+   736→   736→                        <>
+   737→   737→                          <Copy className="h-3.5 w-3.5" />
+   738→   738→                          Copy prompt
+   739→   739→                        </>
+   740→   740→                      )}
+   741→   741→                    </Button>
+   742→   742→                    <Button
+   743→   743→                      size="sm"
+   744→   744→                      variant="outline"
+   745→   745→                      onClick={() => handleShare(current)}
+   746→   746→                      className="gap-1.5"
+   747→   747→                    >
+   748→   748→                      <Share2 className="h-3.5 w-3.5" />
+   749→   749→                    </Button>
+   750→   750→                  </div>
+   751→   751→
+   752→   752→                  {/* Prompt display */}
+   753→   753→                  <div className="rounded-xl bg-stone-50 p-3">
+   754→   754→                    <p className="text-xs leading-relaxed text-stone-600">{current.prompt}</p>
+   755→   755→                    <div className="mt-2 flex flex-wrap items-center gap-2 text-[10px] text-stone-400">
+   756→   756→                      <span className="rounded bg-stone-200 px-1.5 py-0.5 font-semibold">
+   757→   757→                        {current.styleLabel}
+   758→   758→                      </span>
+   759→   759→                      <span>seed: {current.seed}</span>
+   760→   760→                      <span>·</span>
+   761→   761→                      <span>
+   762→   762→                        {new Date(current.generatedAt).toLocaleTimeString()}
+   763→   763→                      </span>
+   764→   764→                    </div>
+   765→   765→                  </div>
+   766→   766→                </motion.div>
+   767→   767→              )}
+   768→   768→
+   769→   769→              {!error && !loading && !current && (
+   770→   770→                <motion.div
+   771→   771→                  key="empty"
+   772→   772→                  initial={{ opacity: 0 }}
+   773→   773→                  animate={{ opacity: 1 }}
+   774→   774→                  exit={{ opacity: 0 }}
+   775→   775→                  className={cn(
+   776→   776→                    "flex flex-col items-center justify-center gap-3 rounded-2xl border border-dashed border-stone-300 bg-stone-50/50 p-8 text-center",
+   777→   777→                    aspectRatioClass(size)
+   778→   778→                  )}
+   779→   779→                >
+   780→   780→                  <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-rose-100 to-orange-100">
+   781→   781→                    <ImageIcon className="h-7 w-7 text-rose-400" />
+   782→   782→                  </div>
+   783→   783→                  <p className="text-sm font-bold text-stone-600">No image yet</p>
+   784→   784→                  <p className="max-w-xs text-xs text-stone-500">
+   785→   785→                    Write a prompt on the left, pick a style, and hit <strong>Generate Image</strong> to see your creation here.
+   786→   786→                  </p>
+   787→   787→                </motion.div>
+   788→   788→              )}
+   789→   789→            </AnimatePresence>
+   790→   790→          </div>
+   791→   791→
+   792→   792→          {/* History */}
+   793→   793→          {history.length > 0 && (
+   794→   794→            <div className="rounded-3xl border border-stone-200 bg-white p-5 shadow-sm">
+   795→   795→              <div className="mb-3 flex items-center justify-between">
+   796→   796→                <div className="flex items-center gap-2">
+   797→   797→                  <History className="h-4 w-4 text-stone-500" />
+   798→   798→                  <h3 className="text-sm font-bold text-stone-700">
+   799→   799→                    History <span className="text-stone-400">({history.length})</span>
+   800→   800→                  </h3>
+   801→   801→                </div>
+   802→   802→                <Button
+   803→   803→                  size="sm"
+   804→   804→                  variant="ghost"
+   805→   805→                  onClick={handleClearHistory}
+   806→   806→                  className="h-8 gap-1.5 text-xs text-stone-500 hover:bg-rose-50 hover:text-rose-600"
+   807→   807→                >
+   808→   808→                  <Trash2 className="h-3.5 w-3.5" />
+   809→   809→                  Clear all
+   810→   810→                </Button>
+   811→   811→              </div>
+   812→   812→
+   813→   813→              <div className="max-h-[640px] space-y-4 overflow-y-auto pr-1 [scrollbar-width:thin]">
+   814→   814→                {groupedHistory.map(([date, items]) => (
+   815→   815→                  <div key={date}>
+   816→   816→                    <p className="mb-2 text-[10px] font-bold uppercase tracking-wide text-stone-400">
+   817→   817→                      {date}
+   818→   818→                    </p>
+   819→   819→                    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+   820→   820→                      {items.map((item) => (
+   821→   821→                        <motion.div
+   822→   822→                          key={item.id}
+   823→   823→                          layout
+   824→   824→                          initial={{ opacity: 0, scale: 0.9 }}
+   825→   825→                          animate={{ opacity: 1, scale: 1 }}
+   826→   826→                          exit={{ opacity: 0, scale: 0.9 }}
+   827→   827→                          className="group relative overflow-hidden rounded-xl border border-stone-200 bg-stone-50"
+   828→   828→                        >
+   829→   829→                          <div className={cn("w-full", aspectRatioClass(item.size))}>
+   830→   830→                            { }
+   831→   831→                            <img
+   832→   832→                              src={item.image}
+   833→   833→                              alt={item.prompt}
+   834→   834→                              className="h-full w-full cursor-pointer object-cover transition-transform group-hover:scale-105"
+   835→   835→                              onClick={() => {
+   836→   836→                                setPreviewItem(item);
+   837→   837→                                setPreviewOpen(true);
+   838→   838→                              }}
+   839→   839→                            />
+   840→   840→                          </div>
+   841→   841→
+   842→   842→                          {/* Hover overlay */}
+   843→   843→                          <div className="pointer-events-none absolute inset-0 flex items-end bg-gradient-to-t from-black/70 via-black/0 to-transparent p-1.5 opacity-0 transition-opacity group-hover:opacity-100">
+   844→   844→                            <div className="pointer-events-auto flex w-full items-center justify-between gap-1">
+   845→   845→                              <button
+   846→   846→                                type="button"
+   847→   847→                                onClick={() => handleToggleFavorite(item.id)}
+   848→   848→                                className={cn(
+   849→   849→                                  "flex h-6 w-6 items-center justify-center rounded-md backdrop-blur-sm transition-colors",
+   850→   850→                                  item.favorite
+   851→   851→                                    ? "bg-rose-500 text-white"
+   852→   852→                                    : "bg-white/80 text-stone-600 hover:bg-white"
+   853→   853→                                )}
+   854→   854→                                aria-label="Favorite"
+   855→   855→                              >
+   856→   856→                                <Heart className={cn("h-3 w-3", item.favorite && "fill-current")} />
+   857→   857→                              </button>
+   858→   858→                              <div className="flex gap-1">
+   859→   859→                                <button
+   860→   860→                                  type="button"
+   861→   861→                                  onClick={() => handleDownload(item)}
+   862→   862→                                  className="flex h-6 w-6 items-center justify-center rounded-md bg-white/80 text-stone-600 backdrop-blur-sm transition-colors hover:bg-white"
+   863→   863→                                  aria-label="Download"
+   864→   864→                                >
+   865→   865→                                  <Download className="h-3 w-3" />
+   866→   866→                                </button>
+   867→   867→                                <button
+   868→   868→                                  type="button"
+   869→   869→                                  onClick={() => handleDelete(item.id)}
+   870→   870→                                  className="flex h-6 w-6 items-center justify-center rounded-md bg-white/80 text-stone-600 backdrop-blur-sm transition-colors hover:bg-rose-100 hover:text-rose-600"
+   871→   871→                                  aria-label="Delete"
+   872→   872→                                >
+   873→   873→                                  <Trash2 className="h-3 w-3" />
+   874→   874→                                </button>
+   875→   875→                              </div>
+   876→   876→                            </div>
+   877→   877→                          </div>
+   878→   878→
+   879→   879→                          {/* Favorite badge */}
+   880→   880→                          {item.favorite && (
+   881→   881→                            <div className="absolute left-1.5 top-1.5 flex h-5 w-5 items-center justify-center rounded-full bg-rose-500 shadow">
+   882→   882→                              <Heart className="h-2.5 w-2.5 fill-current text-white" />
+   883→   883→                            </div>
+   884→   884→                          )}
+   885→   885→                        </motion.div>
+   886→   886→                      ))}
+   887→   887→                    </div>
+   888→   888→                  </div>
+   889→   889→                ))}
+   890→   890→              </div>
+   891→   891→            </div>
+   892→   892→          )}
+   893→   893→        </motion.div>
+   894→   894→      </div>
+   895→   895→
+   896→   896→      {/* ══════════════════ Full-size preview modal ══════════════════ */}
+   897→   897→      <Dialog open={previewOpen} onOpenChange={setPreviewOpen}>
+   898→   898→        <DialogContent className="max-w-5xl border-stone-200 bg-white p-0 sm:rounded-3xl">
+   899→   899→          <DialogTitle className="sr-only">Image preview</DialogTitle>
+   900→   900→          {previewItem && (
+   901→   901→            <div className="flex flex-col gap-3 p-4 sm:flex-row sm:p-6">
+   902→   902→              <div className="flex-1 overflow-hidden rounded-2xl bg-stone-900">
+   903→   903→                { }
+   904→   904→                <img
+   905→   905→                  src={previewItem.image}
+   906→   906→                  alt={previewItem.prompt}
+   907→   907→                  className="mx-auto max-h-[70vh] w-auto object-contain"
+   908→   908→                />
+   909→   909→              </div>
+   910→   910→              <div className="flex w-full shrink-0 flex-col gap-3 sm:w-72">
+   911→   911→                <div className="flex items-center justify-between">
+   912→   912→                  <Badge variant="secondary" className="bg-stone-100 text-stone-700">
+   913→   913→                    {previewItem.styleLabel}
+   914→   914→                  </Badge>
+   915→   915→                  <button
+   916→   916→                    type="button"
+   917→   917→                    onClick={() => setPreviewOpen(false)}
+   918→   918→                    className="flex h-8 w-8 items-center justify-center rounded-lg text-stone-400 hover:bg-stone-100 hover:text-stone-700"
+   919→   919→                    aria-label="Close"
+   920→   920→                  >
+   921→   921→                    <X className="h-4 w-4" />
+   922→   922→                  </button>
+   923→   923→                </div>
+   924→   924→                <div className="rounded-xl bg-stone-50 p-3">
+   925→   925→                  <p className="text-[10px] font-bold uppercase tracking-wide text-stone-400">
+   926→   926→                    Prompt
+   927→   927→                  </p>
+   928→   928→                  <p className="mt-1 text-xs leading-relaxed text-stone-700">
+   929→   929→                    {previewItem.prompt}
+   930→   930→                  </p>
+   931→   931→                </div>
+   932→   932→                <div className="grid grid-cols-2 gap-2 text-[11px]">
+   933→   933→                  <div className="rounded-lg bg-stone-50 p-2">
+   934→   934→                    <p className="font-bold text-stone-400">Size</p>
+   935→   935→                    <p className="font-semibold text-stone-700">{previewItem.size}</p>
+   936→   936→                  </div>
+   937→   937→                  <div className="rounded-lg bg-stone-50 p-2">
+   938→   938→                    <p className="font-bold text-stone-400">Seed</p>
+   939→   939→                    <p className="font-semibold text-stone-700">{previewItem.seed}</p>
+   940→   940→                  </div>
+   941→   941→                  <div className="rounded-lg bg-stone-50 p-2">
+   942→   942→                    <p className="font-bold text-stone-400">Bytes</p>
+   943→   943→                    <p className="font-semibold text-stone-700">{formatBytes(previewItem.bytes)}</p>
+   944→   944→                  </div>
+   945→   945→                  <div className="rounded-lg bg-stone-50 p-2">
+   946→   946→                    <p className="font-bold text-stone-400">Created</p>
+   947→   947→                    <p className="font-semibold text-stone-700">
+   948→   948→                      {new Date(previewItem.generatedAt).toLocaleTimeString()}
+   949→   949→                    </p>
+   950→   950→                  </div>
+   951→   951→                </div>
+   952→   952→                <div className="mt-auto flex flex-col gap-2">
+   953→   953→                  <Button onClick={() => handleDownload(previewItem)} className="gap-1.5 bg-stone-800 hover:bg-stone-700">
+   954→   954→                    <Download className="h-4 w-4" />
+   955→   955→                    Download PNG
+   956→   956→                  </Button>
+   957→   957→                  <div className="flex gap-2">
+   958→   958→                    <Button
+   959→   959→                      variant="outline"
+   960→   960→                      size="sm"
+   961→   961→                      onClick={() => handleCopyPrompt(previewItem)}
+   962→   962→                      className="flex-1 gap-1.5"
+   963→   963→                    >
+   964→   964→                      {copiedId === previewItem.id ? (
+   965→   965→                        <>
+   966→   966→                          <Check className="h-3.5 w-3.5 text-emerald-600" />
+   967→   967→                          Copied
+   968→   968→                        </>
+   969→   969→                      ) : (
+   970→   970→                        <>
+   971→   971→                          <Copy className="h-3.5 w-3.5" />
+   972→   972→                          Copy
+   973→   973→                        </>
+   974→   974→                      )}
+   975→   975→                    </Button>
+   976→   976→                    <Button
+   977→   977→                      variant="outline"
+   978→   978→                      size="sm"
+   979→   979→                      onClick={() => handleShare(previewItem)}
+   980→   980→                      className="flex-1 gap-1.5"
+   981→   981→                    >
+   982→   982→                      <Share2 className="h-3.5 w-3.5" />
+   983→   983→                      Share
+   984→   984→                    </Button>
+   985→   985→                  </div>
+   986→   986→                </div>
+   987→   987→              </div>
+   988→   988→            </div>
+   989→   989→          )}
+   990→   990→        </DialogContent>
+   991→   991→      </Dialog>
+   992→   992→    </TooltipProvider>
+   993→   993→  );
+   994→   994→}
+   995→   995→

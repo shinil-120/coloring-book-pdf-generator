@@ -122,11 +122,22 @@ function toBookMeta(row: DbRow): BookMeta {
 /** List all coloring books, newest first. */
 export async function listBooks(): Promise<BookMeta[]> {
   if (!turso) return [];
-  const result = await turso.execute({
-    sql: "SELECT * FROM ColoringBook ORDER BY createdAt DESC LIMIT 10",
-    args: [],
-  });
-  return result.rows.map((row) => toBookMeta(row as unknown as DbRow));
+  try {
+    const result = await turso.execute({
+      sql: "SELECT * FROM ColoringBook ORDER BY createdAt DESC LIMIT 10",
+      args: [],
+    });
+    return result.rows.map((row) => toBookMeta(row as unknown as DbRow));
+  } catch (err) {
+    // The ColoringBook table may not exist in databases that were created by
+    // the category/provider seeders (e.g. db/categories.db). In that case,
+    // return an empty list instead of crashing the /api/books endpoint.
+    const msg = err instanceof Error ? err.message : String(err);
+    if (/no such table|SQLITE_ERROR/i.test(msg)) {
+      return [];
+    }
+    throw err;
+  }
 }
 
 /** Get a single book by slug. */

@@ -5,7 +5,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ColoringBookGenerator } from "@/components/coloring-book-generator";
 import { PdfEditor } from "@/components/pdf-editor";
 import { ImageGenerator } from "@/components/image-generator";
-import { Palette, FileText, Wand2, Sparkles } from "lucide-react";
+import { Generator } from "@/components/generator";
+import { Palette, FileText, Wand2, Sparkles, Zap } from "lucide-react";
 
 export default function Home() {
   const [tab, setTab] = useState<string>("books");
@@ -51,24 +52,31 @@ export default function Home() {
         <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
           <Tabs value={tab} onValueChange={setTab} className="w-full">
             <div className="mb-6 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <TabsList className="h-12 w-full gap-1 rounded-2xl border border-rose-100 bg-white p-1.5 shadow-sm sm:w-auto">
+              <TabsList className="h-12 w-full gap-1 rounded-2xl border border-rose-100 bg-white p-1.5 shadow-sm sm:w-auto sm:flex-wrap">
                 <TabsTrigger
                   value="books"
-                  className="h-9 gap-2 rounded-xl px-4 text-sm font-bold text-stone-600 data-[state=active]:bg-gradient-to-r data-[state=active]:from-pink-500 data-[state=active]:to-rose-500 data-[state=active]:text-white data-[state=active]:shadow-md"
+                  className="h-9 gap-2 rounded-xl px-3 text-xs font-bold text-stone-600 data-[state=active]:bg-gradient-to-r data-[state=active]:from-pink-500 data-[state=active]:to-rose-500 data-[state=active]:text-white data-[state=active]:shadow-md sm:px-4 sm:text-sm"
                 >
                   <Palette className="h-4 w-4" />
                   Coloring Book PDF
                 </TabsTrigger>
                 <TabsTrigger
                   value="editor"
-                  className="h-9 gap-2 rounded-xl px-4 text-sm font-bold text-stone-600 data-[state=active]:bg-gradient-to-r data-[state=active]:from-violet-500 data-[state=active]:to-purple-500 data-[state=active]:text-white data-[state=active]:shadow-md"
+                  className="h-9 gap-2 rounded-xl px-3 text-xs font-bold text-stone-600 data-[state=active]:bg-gradient-to-r data-[state=active]:from-violet-500 data-[state=active]:to-purple-500 data-[state=active]:text-white data-[state=active]:shadow-md sm:px-4 sm:text-sm"
                 >
                   <FileText className="h-4 w-4" />
                   Edit PDF
                 </TabsTrigger>
                 <TabsTrigger
+                  value="generator"
+                  className="h-9 gap-2 rounded-xl px-3 text-xs font-bold text-stone-600 data-[state=active]:bg-gradient-to-r data-[state=active]:from-amber-500 data-[state=active]:to-orange-500 data-[state=active]:text-white data-[state=active]:shadow-md sm:px-4 sm:text-sm"
+                >
+                  <Zap className="h-4 w-4" />
+                  Generator
+                </TabsTrigger>
+                <TabsTrigger
                   value="image-gen"
-                  className="h-9 gap-2 rounded-xl px-4 text-sm font-bold text-stone-600 data-[state=active]:bg-gradient-to-r data-[state=active]:from-amber-500 data-[state=active]:to-orange-500 data-[state=active]:text-white data-[state=active]:shadow-md"
+                  className="h-9 gap-2 rounded-xl px-3 text-xs font-bold text-stone-600 data-[state=active]:bg-gradient-to-r data-[state=active]:from-amber-500 data-[state=active]:to-orange-500 data-[state=active]:text-white data-[state=active]:shadow-md sm:px-4 sm:text-sm"
                 >
                   <Wand2 className="h-4 w-4" />
                   AI Image Gen
@@ -86,6 +94,10 @@ export default function Home() {
 
             <TabsContent value="editor" className="mt-0">
               <PdfEditor />
+            </TabsContent>
+
+            <TabsContent value="generator" className="mt-0">
+              <Generator />
             </TabsContent>
 
             <TabsContent value="image-gen" className="mt-0">
