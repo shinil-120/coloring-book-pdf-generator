@@ -1,0 +1,10 @@
+# Standalone Python Coloring Book Generator — same specs as the web app.
+# Tested with Python 3.10+
+
+openai>=1.51.0          # OpenAI Python SDK (gpt-image-2)
+Pillow>=10.0.0          # Image manipulation (replaces sharp)
+numpy>=1.24.0           # Fast pixel operations for B&W cleanup + flood-fill
+reportlab>=4.0.0        # PDF generation (replaces pdfkit)
+PyMuPDF>=1.23.0        # PDF → thumbnail rendering (replaces pdf-to-img)
+python-dotenv>=1.0.0   # Load .env file
+tqdm>=4.66.0            # Progress bars
