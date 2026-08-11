@@ -314,6 +314,7 @@ export function ManageProviders({ open, onOpenChange, onChanged }: Props) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [editProvider, setEditProvider] = useState<Provider | null>(null);
   const [testingId, setTestingId] = useState<string | null>(null);
+  const [testingAll, setTestingAll] = useState(false);
   const [helpOpen, setHelpOpen] = useState(false);
 
   const sensors = useSensors(
@@ -427,6 +428,77 @@ export function ManageProviders({ open, onOpenChange, onChanged }: Props) {
     []
   );
 
+  // ─── Test all providers sequentially — shows a summary toast at the end ───
+  const handleTestAll = useCallback(async () => {
+    if (providers.length === 0) return;
+    setTestingAll(true);
+    const results: { label: string; ok: boolean; skipped: boolean; msg: string }[] = [];
+
+    for (const provider of providers) {
+      setTestingId(provider.id);
+      try {
+        const res = await fetch(`/api/providers/${provider.id}/test`, {
+          method: "POST",
+        });
+        const data = await res.json();
+        if (data.envVarSet === false) {
+          results.push({
+            label: provider.label,
+            ok: false,
+            skipped: true,
+            msg: `env var "${provider.apiKeyEnv}" not set`,
+          });
+        } else if (data.success && data.tested === true) {
+          results.push({ label: provider.label, ok: true, skipped: false, msg: "valid" });
+        } else if (data.success && data.tested === false) {
+          results.push({
+            label: provider.label,
+            ok: true,
+            skipped: true,
+            msg: "test not implemented (will verify on first generation)",
+          });
+        } else {
+          results.push({
+            label: provider.label,
+            ok: false,
+            skipped: false,
+            msg: data.message ?? "failed",
+          });
+        }
+      } catch (err) {
+        results.push({
+          label: provider.label,
+          ok: false,
+          skipped: false,
+          msg: err instanceof Error ? err.message : "request failed",
+        });
+      }
+    }
+    setTestingId(null);
+    setTestingAll(false);
+
+    // Show a summary toast
+    const passed = results.filter((r) => r.ok).length;
+    const failed = results.filter((r) => !r.ok && !r.skipped).length;
+    const skipped = results.filter((r) => r.skipped).length;
+
+    if (failed === 0) {
+      toast.success(`All ${passed} provider${passed === 1 ? "" : "s"} OK`, {
+        description:
+          skipped > 0
+            ? `${skipped} skipped (env var not set or test not implemented)`
+            : `${passed} valid, 0 issues`,
+      });
+    } else {
+      toast.warning(`${passed} OK, ${failed} failed`, {
+        description: results
+          .filter((r) => !r.ok && !r.skipped)
+          .map((r) => `• ${r.label}: ${r.msg.slice(0, 60)}`)
+          .join("\n"),
+      });
+    }
+  }, [providers]);
+
   const handleToggle = useCallback(
     async (provider: Provider) => {
       try {
@@ -516,15 +588,34 @@ export function ManageProviders({ open, onOpenChange, onChanged }: Props) {
             <h3 className="text-sm font-bold text-stone-700">
               Active Providers ({providers.length})
             </h3>
-            <Button
-              type="button"
-              size="sm"
-              onClick={() => setHelpOpen(true)}
-              variant="ghost"
-              className="h-8 gap-1.5 text-xs text-stone-500"
-            >
-              <HelpCircle className="h-3.5 w-3.5" /> How to get API keys
-            </Button>
+            <div className="flex items-center gap-2">
+              {providers.length > 0 && (
+                <Button
+                  type="button"
+                  size="sm"
+                  onClick={handleTestAll}
+                  disabled={testingAll}
+                  variant="outline"
+                  className="h-8 gap-1.5 text-xs text-stone-600"
+                >
+                  {testingAll ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <Zap className="h-3.5 w-3.5" />
+                  )}
+                  Test all
+                </Button>
+              )}
+              <Button
+                type="button"
+                size="sm"
+                onClick={() => setHelpOpen(true)}
+                variant="ghost"
+                className="h-8 gap-1.5 text-xs text-stone-500"
+              >
+                <HelpCircle className="h-3.5 w-3.5" /> How to get API keys
+              </Button>
+            </div>
           </div>
 
           {loading ? (

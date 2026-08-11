@@ -249,6 +249,9 @@ export function Generator() {
   const [itemsError, setItemsError] = useState<string | null>(null);
   const [selectedItemNames, setSelectedItemNames] = useState<Set<string>>(new Set());
 
+  // ─── Recently used categories (persisted to localStorage) ───
+  const [recentSlugs, setRecentSlugs] = useState<string[]>([]);
+
   // ─── Generator state ───
   const [pageCount, setPageCount] = useState<number>(30);
   const [quality, setQuality] = useState<string>("medium");
@@ -355,6 +358,36 @@ export function Generator() {
     fetchBudget();
     fetchProviders();
   }, [fetchCategories, fetchBudget, fetchProviders]);
+
+  // ─── Load recently-used categories from localStorage ───
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("generator-recent-categories");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          setRecentSlugs(parsed.filter((s) => typeof s === "string").slice(0, 6));
+        }
+      }
+    } catch {
+      // ignore parse errors
+    }
+  }, []);
+
+  // ─── Record a category as recently used (called on generate) ───
+  const recordRecentCategory = useCallback((slug: string) => {
+    if (!slug) return;
+    setRecentSlugs((prev) => {
+      // Remove if already present, then prepend, cap at 6
+      const next = [slug, ...prev.filter((s) => s !== slug)].slice(0, 6);
+      try {
+        localStorage.setItem("generator-recent-categories", JSON.stringify(next));
+      } catch {
+        // localStorage may be full or unavailable
+      }
+      return next;
+    });
+  }, []);
 
   // ─── When category changes, fetch items ───
   useEffect(() => {
@@ -544,6 +577,9 @@ export function Generator() {
     setPdfMeta(null);
     setTotalCost(0);
 
+    // Record this category as recently used
+    recordRecentCategory(selectedSlug);
+
     // Initialize per-item state in selection order
     const names = Array.from(selectedItemNames);
     const initial: ItemState[] = names.map((name) => ({
@@ -643,7 +679,7 @@ export function Generator() {
       setCurrentItemIdx(-1);
       fetchBudget();
     }
-  }, [selectedSlug, selectedItemNames, providers, quality, resumeMode, fetchBudget]);
+  }, [selectedSlug, selectedItemNames, providers, quality, resumeMode, fetchBudget, recordRecentCategory]);
 
   const handleCancel = useCallback(() => {
     cancelRef.current = true;
@@ -878,6 +914,32 @@ export function Generator() {
                       {selectedCategory.description || "—"}
                     </p>
                   </div>
+                </div>
+              </div>
+            )}
+
+            {/* Recently used categories — quick-access chips */}
+            {recentSlugs.length > 0 && !selectedSlug && (
+              <div className="mt-3">
+                <p className="mb-1.5 text-[10px] font-bold uppercase tracking-wide text-stone-400">
+                  Recently used
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {recentSlugs
+                    .map((slug) => categories.find((c) => c.slug === slug))
+                    .filter((c): c is Category => !!c)
+                    .slice(0, 6)
+                    .map((c) => (
+                      <button
+                        key={c.slug}
+                        type="button"
+                        onClick={() => setSelectedSlug(c.slug)}
+                        className="inline-flex items-center gap-1 rounded-full border border-stone-200 bg-white px-2.5 py-1 text-[11px] font-semibold text-stone-600 transition-all hover:border-rose-200 hover:bg-rose-50 hover:text-rose-700"
+                      >
+                        <span>{c.emoji}</span>
+                        <span>{c.name}</span>
+                      </button>
+                    ))}
                 </div>
               </div>
             )}
@@ -1517,28 +1579,100 @@ export function Generator() {
             </motion.div>
           )}
 
-          {/* Empty state */}
+          {/* Empty state — context-aware onboarding */}
           {!isGenerating && itemStates.length === 0 && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              className="flex flex-col items-center justify-center gap-4 rounded-3xl border-2 border-dashed border-stone-200 bg-white/60 p-10 text-center"
+              className="flex flex-col items-center justify-center gap-4 rounded-3xl border-2 border-dashed border-stone-200 bg-white/60 p-8 text-center"
             >
               <div className="flex h-20 w-20 items-center justify-center rounded-full bg-gradient-to-br from-rose-100 via-orange-100 to-amber-100 shadow-inner">
                 <Wand2 className="h-10 w-10 text-rose-500" strokeWidth={1.5} />
               </div>
               <div>
                 <p className="text-base font-extrabold text-stone-800">
-                  Ready to generate
+                  {providers.filter((p) => p.isActive && p.isConfigured).length === 0
+                    ? "Welcome — let's get you set up"
+                    : "Ready to generate"}
                 </p>
                 <p className="mt-1 max-w-md text-xs text-stone-500">
-                  Pick a category, select items, choose quality, then click{" "}
-                  <span className="font-bold text-rose-600">Generate</span>.
-                  Each image takes 5-15 seconds. Vercel limits us to 60s per
-                  batch — we&apos;ll automatically continue until all selected
-                  items are done.
+                  {providers.filter((p) => p.isActive && p.isConfigured).length === 0
+                    ? "Follow these 3 steps to generate your first coloring book:"
+                    : "Pick a category, select items, choose quality, then click Generate. Each image takes 5-15 seconds."}
                 </p>
               </div>
+
+              {/* Step-by-step onboarding (only when no providers configured) */}
+              {providers.filter((p) => p.isActive && p.isConfigured).length === 0 && (
+                <div className="w-full max-w-md space-y-2 text-left">
+                  <div className={cn(
+                    "flex items-start gap-3 rounded-2xl border p-3 transition-colors",
+                    providers.length === 0
+                      ? "border-rose-200 bg-rose-50/50"
+                      : "border-stone-200 bg-stone-50/50 opacity-60"
+                  )}>
+                    <div className={cn(
+                      "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-extrabold",
+                      providers.length === 0
+                        ? "bg-rose-500 text-white"
+                        : "bg-emerald-500 text-white"
+                    )}>
+                      {providers.length === 0 ? "1" : "✓"}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-bold text-stone-700">Add a provider</p>
+                      <p className="text-[11px] text-stone-500">
+                        Click "Add a provider" → pick OpenAI (or Z.AI for free) → paste your API key
+                      </p>
+                    </div>
+                  </div>
+                  <div className={cn(
+                    "flex items-start gap-3 rounded-2xl border p-3 transition-colors",
+                    providers.length > 0 && !selectedSlug
+                      ? "border-amber-200 bg-amber-50/50"
+                      : "border-stone-200 bg-stone-50/50 opacity-60"
+                  )}>
+                    <div className={cn(
+                      "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-extrabold",
+                      providers.length > 0 && !selectedSlug
+                        ? "bg-amber-500 text-white"
+                        : selectedSlug
+                          ? "bg-emerald-500 text-white"
+                          : "bg-stone-300 text-stone-500"
+                    )}>
+                      {selectedSlug ? "✓" : "2"}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-bold text-stone-700">Pick a category & items</p>
+                      <p className="text-[11px] text-stone-500">
+                        Choose from 137 categories, then select which items to generate
+                      </p>
+                    </div>
+                  </div>
+                  <div className={cn(
+                    "flex items-start gap-3 rounded-2xl border p-3 transition-colors",
+                    selectedSlug && selectedItemNames.size > 0
+                      ? "border-emerald-200 bg-emerald-50/50"
+                      : "border-stone-200 bg-stone-50/50 opacity-60"
+                  )}>
+                    <div className={cn(
+                      "flex h-7 w-7 shrink-0 items-center justify-center rounded-full text-xs font-extrabold",
+                      selectedSlug && selectedItemNames.size > 0
+                        ? "bg-emerald-500 text-white"
+                        : "bg-stone-300 text-stone-500"
+                    )}>
+                      3
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="text-xs font-bold text-stone-700">Click Generate</p>
+                      <p className="text-[11px] text-stone-500">
+                        Watch live progress, then download your KDP-ready PDF
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <div className="flex flex-wrap items-center justify-center gap-2 text-[11px] text-stone-500">
                 <Badge variant="outline" className="bg-white text-stone-600">
                   <Sparkles className="mr-1 h-3 w-3" /> 7 providers supported

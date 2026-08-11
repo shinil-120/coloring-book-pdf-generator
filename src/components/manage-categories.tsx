@@ -35,6 +35,7 @@ import {
   RotateCcw,
   Library,
   ChevronRight,
+  Copy,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -353,6 +354,60 @@ export function ManageCategories({ open, onOpenChange, onChanged }: Props) {
     [onChanged]
   );
 
+  // ─── Duplicate a category (creates a custom copy with all items) ───
+  // Works for both built-in and custom categories. The new category gets
+  // a "(Copy)" suffix in the name and a "-copy" suffix in the slug to
+  // avoid collisions. Items are copied over with their palettes intact.
+  const handleDuplicate = useCallback(
+    async (category: Category) => {
+      // Fetch items for the source category
+      try {
+        const itemsRes = await fetch(`/api/categories/${category.slug}/items`);
+        const itemsData = await itemsRes.json();
+        if (!itemsRes.ok || !itemsData.success) {
+          throw new Error(itemsData?.error || `HTTP ${itemsRes.status}`);
+        }
+        const items: { name: string; palette?: number[][] | null }[] = (itemsData.items || []).map(
+          (i: { name: string; palette?: number[][] | null; isDeleted?: boolean }) => ({
+            name: i.name,
+            palette: i.palette ?? null,
+          })
+        );
+
+        // Build a unique slug + name
+        const newSlug = `${category.slug}-copy-${Date.now().toString(36).slice(-4)}`;
+        const newName = `${category.name} (Copy)`;
+
+        const createRes = await fetch("/api/categories", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            name: newName,
+            slug: newSlug,
+            emoji: category.emoji,
+            themeColor: category.themeColor,
+            description: `Duplicated from "${category.name}" — ${category.description || ""}`.trim(),
+            items: items.map((i) => i.name),
+          }),
+        });
+        const createData = await createRes.json();
+        if (!createRes.ok || !createData.success) {
+          throw new Error(createData?.error || `HTTP ${createRes.status}`);
+        }
+
+        toast.success(`Duplicated as "${newName}"`, {
+          description: `${items.length} items copied — customize freely`,
+        });
+        onChanged?.();
+      } catch (err) {
+        toast.error("Failed to duplicate category", {
+          description: err instanceof Error ? err.message : "Unknown error",
+        });
+      }
+    },
+    [onChanged]
+  );
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[92vh] overflow-hidden rounded-3xl border-stone-200 p-0 sm:max-w-4xl">
@@ -431,6 +486,7 @@ export function ManageCategories({ open, onOpenChange, onChanged }: Props) {
                   categories={filter === "all" ? builtIn : filtered}
                   onEdit={setEditingCategory}
                   onDelete={handleDelete}
+                  onDuplicate={handleDuplicate}
                 />
               )}
 
@@ -446,6 +502,7 @@ export function ManageCategories({ open, onOpenChange, onChanged }: Props) {
                   categories={filter === "all" ? custom : filtered}
                   onEdit={setEditingCategory}
                   onDelete={handleDelete}
+                  onDuplicate={handleDuplicate}
                   emptyHint={
                     <Button
                       type="button"
@@ -513,6 +570,7 @@ function CategorySection({
   categories,
   onEdit,
   onDelete,
+  onDuplicate,
   emptyHint,
 }: {
   title: string;
@@ -520,6 +578,7 @@ function CategorySection({
   categories: Category[];
   onEdit: (c: Category) => void;
   onDelete: (c: Category) => void;
+  onDuplicate: (c: Category) => void;
   emptyHint?: React.ReactNode;
 }) {
   if (categories.length === 0) {
@@ -542,7 +601,13 @@ function CategorySection({
       </div>
       <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
         {categories.map((c) => (
-          <CategoryRow key={c.id} category={c} onEdit={() => onEdit(c)} onDelete={() => onDelete(c)} />
+          <CategoryRow
+            key={c.id}
+            category={c}
+            onEdit={() => onEdit(c)}
+            onDelete={() => onDelete(c)}
+            onDuplicate={() => onDuplicate(c)}
+          />
         ))}
       </div>
     </div>
@@ -553,10 +618,12 @@ function CategoryRow({
   category,
   onEdit,
   onDelete,
+  onDuplicate,
 }: {
   category: Category;
   onEdit: () => void;
   onDelete: () => void;
+  onDuplicate: () => void;
 }) {
   const [itemEditorOpen, setItemEditorOpen] = useState(false);
   const colorHex = THEME_COLOR_HEX[category.themeColor] ?? "#78716c";
@@ -604,6 +671,21 @@ function CategoryRow({
           >
             <Pencil className="h-3.5 w-3.5" /> Items
           </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                type="button"
+                size="sm"
+                variant="outline"
+                onClick={onDuplicate}
+                className="h-9 w-9 rounded-xl border-stone-200 p-0"
+                aria-label="Duplicate category"
+              >
+                <Copy className="h-3.5 w-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Duplicate (creates a custom copy)</TooltipContent>
+          </Tooltip>
           <Button
             type="button"
             size="sm"

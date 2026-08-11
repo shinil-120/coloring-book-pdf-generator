@@ -1216,3 +1216,99 @@ Stage Summary:
   - Add generation history view
   - Add "Test all providers" button
   - Consider adding a "Quick start" onboarding guide for first-time users
+
+---
+Task ID: cron-review-2
+Agent: Z.ai Code (webDevReview cron — round 2)
+Task: Assess project status, perform QA testing via agent-browser, fix bugs, add features and styling improvements.
+
+Work Log:
+- Reviewed worklog (1218 lines) — round 1 had fixed 3 critical bugs and added live cost estimate + keyboard shortcut
+- Verified env still intact (.env.local + db/categories.db both present), all API routes return 200
+- Clean lint (0 errors, 0 warnings)
+- QA tested with agent-browser: Generator tab renders, 137 categories load, Manage Categories modal works, Manage Providers modal works
+
+Features added this round:
+
+1. **Recently used categories** (quick-access chips)
+   - New `recentSlugs` state with localStorage persistence (`generator-recent-categories` key)
+   - `recordRecentCategory(slug)` helper — called on every generate, prepends slug, caps at 6
+   - New UI section below the category picker: shows up to 6 recently used categories as clickable chips (emoji + name)
+   - Only visible when no category is currently selected AND there's at least 1 recent category
+   - Clicking a chip selects that category instantly — saves 2 clicks for power users
+   - Each chip uses the same theme styling (hover → rose/pink gradient)
+
+2. **"Test all" button in Manage Providers**
+   - New `handleTestAll` function — iterates all configured providers sequentially, calls `/api/providers/{id}/test` for each
+   - Tracks results: { label, ok, skipped, msg } per provider
+   - Shows summary toast at the end:
+     • All passed → green success toast "All N providers OK"
+     • Some failed → warning toast with bulleted list of failures
+     • Distinguishes "skipped" (env var not set or test not implemented) from "failed"
+   - New `testingAll` state with loading spinner on the button
+   - Button only appears when `providers.length > 0` (empty state still shows "Add your first provider")
+   - Uses Zap icon from lucide-react (already imported)
+
+3. **Context-aware onboarding guide** (3-step wizard for first-time users)
+   - Empty state now adapts based on user progress:
+     • No providers configured → "Welcome — let's get you set up" with 3-step guide
+     • Providers configured but no category selected → "Ready to generate" with simple instructions
+   - 3-step guide cards (with color-coded states):
+     • Step 1: "Add a provider" (rose badge "1" → emerald ✓ when providers.length > 0)
+     • Step 2: "Pick a category & items" (amber badge "2" when providers added but no slug → emerald ✓ when slug selected)
+     • Step 3: "Click Generate" (stone badge "3" → emerald when items selected)
+   - Each step shows a short hint ("Click 'Add a provider' → pick OpenAI...")
+   - Completed steps get emerald background + ✓ badge + opacity-60 dimmed
+   - Active step gets the themed color (rose/amber/emerald) for clear visual hierarchy
+
+4. **Duplicate category feature** (full implementation)
+   - New `handleDuplicate(category)` function in Manage Categories
+   - Fetches all items for the source category via `/api/categories/{slug}/items`
+   - Creates a new custom category via POST `/api/categories`:
+     • Name: `"{original name} (Copy)"`
+     • Slug: `"{original-slug}-copy-{timestamp}"` (unique)
+     • Emoji + themeColor preserved from source
+     • Description: `"Duplicated from '{name}' — {original description}"`
+     • Items: array of all item names copied over
+   - Works for BOTH built-in and custom categories (built-ins can't be deleted but CAN be duplicated — perfect for users who want to customize a built-in)
+   - Success toast: "Duplicated as '{name}' — N items copied — customize freely"
+   - New `Copy` icon imported from lucide-react
+   - Added `onDuplicate` prop to `CategoryRow` and `CategorySection` components
+   - Tooltip: "Duplicate (creates a custom copy)"
+
+Styling improvements:
+- Onboarding step cards use color-coded backgrounds (rose for incomplete, amber for active, emerald for done)
+- Step number badges are circular with bold font, transition colors based on completion state
+- Recently used chips have hover effect matching the existing pink/rose theme
+- "Test all" button uses outline variant with Zap icon — clean, doesn't compete with primary actions
+
+QA verification (agent-browser):
+- Generator tab renders correctly with all features (137 categories, live cost estimate, onboarding guide)
+- Empty state shows "Welcome — let's get you set up" with 3-step guide when no providers configured
+- Manage Categories modal: every category row now has a "Duplicate category" button (aria-label)
+- Manage Providers modal: "Test all" button correctly hidden when no providers configured
+- All API routes return 200
+- Clean lint (0 errors, 0 warnings)
+- No runtime errors in dev.log
+
+Stage Summary:
+- **Status: STABLE, 4 NEW FEATURES ADDED**
+- All 4 features from the round-1 "next opportunities" list implemented:
+  ✅ Recently used categories (localStorage persistence)
+  ✅ "Test all providers" button with summary toast
+  ✅ Quick start onboarding guide (3-step wizard, context-aware)
+  ✅ Duplicate category feature (works for built-in + custom)
+- Remaining from the list (for future rounds):
+  - Per-item palette editing in the item editor
+  - Generation history view
+- Key modified files:
+  - `src/components/generator.tsx` — recently used + onboarding guide
+  - `src/components/manage-categories.tsx` — duplicate category feature
+  - `src/components/manage-providers.tsx` — Test all button
+- Next opportunities (for round 3):
+  - Per-item palette editor (visual color picker per item)
+  - Generation history view (see past generations + regenerate)
+  - "Recent items" quick-access (across categories)
+  - Bulk delete items in item editor
+  - Export/import category as JSON (share with others)
+  - Add a search bar to the category dropdown (currently 137 items to scroll)
