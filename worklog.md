@@ -1140,3 +1140,79 @@ Stage Summary:
 - Local dev uses SQLite fallback (db/categories.db); production uses Turso (just add TURSO_DATABASE_URL + TURSO_AUTH_TOKEN env vars)
 - For production: user needs to add OPENAI_API_KEY (or other provider keys) via Vercel dashboard
 - To seed production Turso: run `bun run scripts/seed-categories.ts` after setting TURSO_DATABASE_URL
+
+---
+Task ID: cron-review-1
+Agent: Z.ai Code (webDevReview cron — round 1)
+Task: Assess project status, perform QA testing via agent-browser, fix bugs, add features and styling improvements.
+
+Work Log:
+- Reviewed worklog (1142 lines) — understood current state: Option 4 fully built with 137 categories × 5429 items, 7 provider types, 11 API routes, 3 new UI components
+- Performed QA testing with agent-browser on http://localhost:3000/
+
+Bugs found & fixed:
+1. **Critical: `.env.local` and `db/categories.db` were missing** (cleaned up between sessions)
+   - Symptom: `/api/categories` returned `[]` with "Turso not configured" message
+   - Generator tab showed "No categories available" instead of the 137-category dropdown
+   - Fix: Re-created `.env.local` with `TURSO_DATABASE_URL=file:./db/categories.db` + re-ran `bun run scripts/seed-categories.ts` to re-seed all 137 categories × 5429 items
+   - Verified: `/api/categories` now returns 137 categories, dropdown shows all options with emojis + item counts
+
+2. **Critical: `/api/budget` returned HTTP 500** — `provider_usage` table didn't exist
+   - Symptom: `Error [LibsqlError]: SQLITE_ERROR: no such table: provider_usage` in dev.log
+   - Root cause: The seeder only creates `categories` + `items` tables. `ensureProviderSchema()` (which creates `providers` + `provider_usage`) was only called from `/api/providers`, not from `/api/budget`
+   - Fix: Added `ensureProviderSchema()` call at the top of `GET /api/budget` (wrapped in try/catch so it's non-fatal)
+   - Verified: `/api/budget` now returns 200 with proper budget data
+
+3. **Missing endpoint: `/api/categories/[slug]/items/reorder`** (noted as unresolved in previous worklog)
+   - Symptom: Item drag-and-drop reorder in the ItemEditorDialog was per-session only (not persisted)
+   - Fix: Created `/api/categories/[slug]/items/reorder/route.ts` — POST endpoint that takes `{ itemIds: string[] }` and calls `reorderItems()` from category-store
+   - Updated `manage-categories.tsx` `handleDragEnd` to call the new endpoint — now persists reorder with toast confirmation "Order saved"
+   - Verified: lint clean, endpoint validates input (400 on bad input, 404 on missing category, 503 if Turso not configured)
+
+Features added:
+4. **Live cost estimate card** (major UX improvement)
+   - New amber/orange gradient card appears between Quality selector and Budget card
+   - Updates instantly as user changes page count, quality, or selection (no API call needed)
+   - Shows: total cost range (min – max), per-image price, estimated time, remaining budget after run
+   - Detects free providers (Z.AI, Cloudflare) and shows "✓ Free provider available" badge
+   - When no items selected: shows "Select items to see cost estimate" placeholder
+   - Uses `QUALITY_OPTIONS` minPrice/maxPrice (added to the constant)
+
+5. **Keyboard shortcut: Ctrl/Cmd+Enter to generate**
+   - Added `useEffect` with `keydown` listener that calls `handleGenerate()` when Ctrl/Cmd+Enter is pressed
+   - Only triggers when not currently generating and selection is valid
+   - Added a hint below the Generate button: "Tip: press ⌘/Ctrl + Enter to generate"
+   - Detects Mac vs Windows to show the correct modifier key (⌘ vs Ctrl)
+
+Styling improvements:
+6. **QUALITY_OPTIONS enhanced** — added `minPrice` and `maxPrice` fields to each quality option for the live estimate calculation
+7. **Live cost estimate card** — gradient amber/orange/rose background with decorative blur, professional typography hierarchy, tabular numbers for alignment
+
+QA verification (agent-browser):
+- Generator tab renders correctly with category picker (137 options), page count slider, quality selector, live cost estimate, budget card, providers card
+- Manage Categories modal opens showing "137 categories · 5429 items total"
+- Manage Providers modal opens with "Add your first provider" empty state
+- All API routes return 200: /api/categories, /api/budget, /api/providers, /api/categories/{slug}/items
+- Clean lint (0 errors, 0 warnings)
+- No runtime errors in dev.log (only a benign Fast Refresh warning)
+
+Stage Summary:
+- **Status: STABLE, BUGS FIXED, FEATURES ADDED**
+- 3 bugs fixed (missing .env.local, /api/budget 500 error, missing reorder endpoint)
+- 2 features added (live cost estimate, keyboard shortcut)
+- 1 styling improvement (enhanced quality options + gradient cost card)
+- All existing features preserved
+- Local dev environment fully restored (137 categories × 5429 items seeded)
+- Key new files:
+  - `src/app/api/categories/[slug]/items/reorder/route.ts` (reorder endpoint)
+- Key modified files:
+  - `src/app/api/budget/route.ts` (added ensureProviderSchema call)
+  - `src/components/generator.tsx` (live cost estimate + keyboard shortcut + QUALITY_OPTIONS enhanced)
+  - `src/components/manage-categories.tsx` (handleDragEnd now persists via reorder endpoint)
+- Next opportunities (for future rounds):
+  - Add "Recently used categories" quick-access section
+  - Add per-item palette editing in the item editor
+  - Add "Duplicate category" feature
+  - Add generation history view
+  - Add "Test all providers" button
+  - Consider adding a "Quick start" onboarding guide for first-time users

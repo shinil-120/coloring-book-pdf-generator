@@ -186,6 +186,8 @@ const QUALITY_OPTIONS = [
     priceRange: "$0.001 – $0.011 / image",
     description: "Fastest, cheapest. Good for drafts.",
     color: "text-emerald-600",
+    minPrice: 0.001,
+    maxPrice: 0.011,
   },
   {
     value: "medium",
@@ -193,6 +195,8 @@ const QUALITY_OPTIONS = [
     priceRange: "$0.003 – $0.042 / image",
     description: "Recommended balance of cost & quality.",
     color: "text-amber-600",
+    minPrice: 0.003,
+    maxPrice: 0.042,
   },
   {
     value: "high",
@@ -200,8 +204,10 @@ const QUALITY_OPTIONS = [
     priceRange: "$0.041 – $0.167 / image",
     description: "Best prompt fidelity. Use for final books.",
     color: "text-rose-600",
+    minPrice: 0.041,
+    maxPrice: 0.167,
   },
-];
+] as const;
 
 const QUICK_PAGE_OPTIONS = [20, 24, 30, 40, 50, 100];
 
@@ -366,6 +372,31 @@ export function Generator() {
   const maxSelectable = useMemo(() => Math.min(pageCount, categoryItems.length), [pageCount, categoryItems.length]);
 
   const selectedCount = selectedItemNames.size;
+
+  // ─── Live cost estimate (client-side, updates instantly) ───
+  // Computes a min/max range based on the selected quality's price range
+  // across all providers. This is an estimate — the actual cost depends on
+  // which provider serves each image (failover may mix providers).
+  const liveEstimate = useMemo(() => {
+    const option = QUALITY_OPTIONS.find((q) => q.value === quality);
+    if (!option || selectedCount === 0) {
+      return { min: 0, max: 0, perImageMin: 0, perImageMax: 0, free: false };
+    }
+    const perImageMin = option.minPrice;
+    const perImageMax = option.maxPrice;
+    // If any configured provider is free (Z.AI or Cloudflare), the min could be $0
+    const hasFreeProvider = providers.some(
+      (p) => p.isActive && p.isConfigured && (p.type === "zai" || p.type === "cloudflare")
+    );
+    const effectiveMin = hasFreeProvider ? 0 : perImageMin;
+    return {
+      min: effectiveMin * selectedCount,
+      max: perImageMax * selectedCount,
+      perImageMin: effectiveMin,
+      perImageMax: perImageMax,
+      free: hasFreeProvider,
+    };
+  }, [quality, selectedCount, providers]);
 
   // Clamp selection if user reduces pageCount below selected count
   useEffect(() => {
@@ -619,6 +650,20 @@ export function Generator() {
     setCancelRequested(true);
     toast.info("Cancelling after current item…");
   }, []);
+
+  // ─── Keyboard shortcut: Ctrl/Cmd+Enter to generate ───
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key === "Enter") {
+        e.preventDefault();
+        if (!isGenerating && selectedSlug && selectedItemNames.size > 0) {
+          handleGenerate();
+        }
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [isGenerating, selectedSlug, selectedItemNames.size, handleGenerate]);
 
   // ─── Assemble PDF ───
   const handleAssemblePdf = useCallback(async () => {
@@ -1034,6 +1079,73 @@ export function Generator() {
             </RadioGroup>
           </div>
 
+          {/* Live cost estimate — updates instantly as you change settings */}
+          <div className="relative overflow-hidden rounded-3xl border border-amber-200 bg-gradient-to-br from-amber-50 via-orange-50 to-rose-50 p-5 shadow-sm">
+            <div className="absolute -right-6 -top-6 h-24 w-24 rounded-full bg-gradient-to-br from-orange-200/40 to-rose-200/40 blur-2xl" />
+            <div className="relative flex items-start justify-between gap-3">
+              <div className="min-w-0 flex-1">
+                <div className="mb-1 flex items-center gap-2">
+                  <DollarSign className="h-4 w-4 text-amber-600" />
+                  <p className="text-xs font-bold uppercase tracking-wide text-amber-700">
+                    Live cost estimate
+                  </p>
+                </div>
+                <p className="text-[11px] text-stone-600">
+                  {selectedCount > 0
+                    ? `${selectedCount} image${selectedCount === 1 ? "" : "s"} × ${quality} quality`
+                    : "Select items to see cost estimate"}
+                </p>
+              </div>
+              {selectedCount > 0 && (
+                <div className="shrink-0 text-right">
+                  {liveEstimate.min === liveEstimate.max ? (
+                    <p className="text-2xl font-extrabold tabular-nums text-stone-800">
+                      ${liveEstimate.max.toFixed(3)}
+                    </p>
+                  ) : (
+                    <p className="text-2xl font-extrabold tabular-nums text-stone-800">
+                      ${liveEstimate.min.toFixed(3)}
+                      <span className="text-base font-bold text-stone-500"> – </span>
+                      ${liveEstimate.max.toFixed(3)}
+                    </p>
+                  )}
+                  {liveEstimate.free && (
+                    <p className="text-[10px] font-bold text-emerald-600">
+                      ✓ Free provider available
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+            {selectedCount > 0 && (
+              <div className="relative mt-3 flex flex-wrap items-center gap-x-4 gap-y-1 border-t border-amber-200/60 pt-2 text-[10px] text-stone-600">
+                <span>
+                  Per image:{" "}
+                  <strong className="font-bold tabular-nums">
+                    ${liveEstimate.perImageMin.toFixed(3)}
+                    {liveEstimate.perImageMin !== liveEstimate.perImageMax && (
+                      <> – ${liveEstimate.perImageMax.toFixed(3)}</>
+                    )}
+                  </strong>
+                </span>
+                <span>
+                  Estimated time:{" "}
+                  <strong className="font-bold tabular-nums">
+                    ~{Math.max(15, selectedCount * 8)}s
+                  </strong>
+                </span>
+                {budget && (
+                  <span>
+                    After this run:{" "}
+                    <strong className="font-bold tabular-nums text-emerald-700">
+                      ${(5 - budget.allTimeSpend - liveEstimate.max).toFixed(3)} left
+                    </strong>
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+
           {/* Budget + Providers summary (compact) */}
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
             {/* Budget card */}
@@ -1157,6 +1269,21 @@ export function Generator() {
                 </>
               )}
             </Button>
+            {readyToGenerate && !isGenerating && (
+              <p className="-mt-1 text-center text-[10px] font-medium text-stone-400">
+                Tip: press{" "}
+                <kbd className="rounded bg-stone-100 px-1 py-0.5 text-[9px] font-bold text-stone-600">
+                  {typeof navigator !== "undefined" && navigator.platform.toLowerCase().includes("mac")
+                    ? "⌘"
+                    : "Ctrl"}
+                </kbd>{" "}
+                +{" "}
+                <kbd className="rounded bg-stone-100 px-1 py-0.5 text-[9px] font-bold text-stone-600">
+                  Enter
+                </kbd>{" "}
+                to generate
+              </p>
+            )}
 
             {/* Dry Run button */}
             <Button

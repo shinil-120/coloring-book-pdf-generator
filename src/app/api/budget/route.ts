@@ -3,6 +3,7 @@ import {
   getTotalSpend,
   listProviders,
   isTursoConfigured,
+  ensureProviderSchema,
 } from "@/lib/provider-store";
 import { turso } from "@/lib/turso";
 
@@ -47,6 +48,15 @@ export async function GET() {
         byProvider: [],
         message: "Turso not configured — set TURSO_DATABASE_URL",
       });
+    }
+
+    // Ensure the providers + provider_usage tables exist (idempotent).
+    // This is critical because the seeder only creates categories/items,
+    // not the provider tables. Without this, the route returns 500.
+    try {
+      await ensureProviderSchema();
+    } catch (schemaErr) {
+      console.warn("[/api/budget] could not ensure provider schema:", schemaErr);
     }
 
     const totals = await getTotalSpend();

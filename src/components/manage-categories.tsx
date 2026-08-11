@@ -1083,13 +1083,27 @@ function ItemEditorDialog({
       if (items[oldIndex].isDeleted || items[newIndex].isDeleted) return;
       const reordered = arrayMove(items, oldIndex, newIndex);
       setItems(reordered); // optimistic
+
+      // Persist the new sort order via the reorder endpoint.
+      // We send ALL non-deleted item IDs (in their new order) so the
+      // server can assign sortOrder = 0, 1, 2, … consistently.
+      const orderedIds = reordered.filter((i) => !i.isDeleted).map((i) => i.id);
       try {
-        // Persist new sort order via individual PATCH (sortOrder isn't directly
-        // editable here; we use the bulk reorder pattern). For simplicity,
-        // we'll persist by re-creating items in order — but the schema does
-        // have sortOrder, and we'd need an endpoint. Skip persistence for now:
-        // the UI shows the reorder but it's per-session.
-        // (Future: add /api/categories/[slug]/items/reorder endpoint.)
+        const res = await fetch(
+          `/api/categories/${encodeURIComponent(category.slug)}/items/reorder`,
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ itemIds: orderedIds }),
+          }
+        );
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          throw new Error(data?.error || `HTTP ${res.status}`);
+        }
+        toast.success("Order saved", {
+          description: `${orderedIds.length} items reordered`,
+        });
         onChanged?.();
       } catch (err) {
         toast.error("Reorder failed", {
@@ -1098,7 +1112,7 @@ function ItemEditorDialog({
         fetchItems(); // rollback
       }
     },
-    [items, onChanged, fetchItems]
+    [items, category.slug, onChanged, fetchItems]
   );
 
   return (
