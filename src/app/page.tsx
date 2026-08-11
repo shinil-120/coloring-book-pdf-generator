@@ -4,7 +4,8 @@ import { useState } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ColoringBookGenerator } from "@/components/coloring-book-generator";
 import { PdfEditor } from "@/components/pdf-editor";
-import { Palette, FileText, Sparkles } from "lucide-react";
+import { ImageGenerator } from "@/components/image-generator";
+import { Palette, FileText, Wand2, Sparkles } from "lucide-react";
 
 export default function Home() {
   const [tab, setTab] = useState<string>("books");
@@ -65,6 +66,13 @@ export default function Home() {
                   <FileText className="h-4 w-4" />
                   Edit PDF
                 </TabsTrigger>
+                <TabsTrigger
+                  value="image-gen"
+                  className="h-9 gap-2 rounded-xl px-4 text-sm font-bold text-stone-600 data-[state=active]:bg-gradient-to-r data-[state=active]:from-amber-500 data-[state=active]:to-orange-500 data-[state=active]:text-white data-[state=active]:shadow-md"
+                >
+                  <Wand2 className="h-4 w-4" />
+                  AI Image Gen
+                </TabsTrigger>
               </TabsList>
 
               <div className="hidden text-xs font-medium text-stone-500 sm:block">
@@ -78,6 +86,10 @@ export default function Home() {
 
             <TabsContent value="editor" className="mt-0">
               <PdfEditor />
+            </TabsContent>
+
+            <TabsContent value="image-gen" className="mt-0">
+              <ImageGenerator />
             </TabsContent>
           </Tabs>
         </div>

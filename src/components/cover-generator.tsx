@@ -102,7 +102,7 @@ export function CoverGenerator({
       setTitle(bookTitle + " Coloring Book");
       setSubtitle(`${pageCount} fun pages to color`);
     }
-  }, [selectedSlug]); // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedSlug]);  
 
   // Fetch page thumbnails when book is selected (for design preview)
   useEffect(() => {

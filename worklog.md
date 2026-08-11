@@ -751,3 +751,66 @@ Stage Summary:
 - No rectangular box in colorized images (border-flood-fill replaces bbox-fill)
 - Assemble-pdf works on Vercel (slug-based, no body size limit)
 - All production APIs verified working
+
+---
+Task ID: ai-image-gen-feature
+Agent: Z.ai Code (user-requested feature)
+Task: Build an AI image generation feature using the built-in z-ai-web-dev-sdk skill — matching the same image quality previously used for coloring-book images (1024x1024 default).
+
+Work Log:
+- User originally asked about fal.ai API keys; redirected them away from sharing keys in chat and proposed using the built-in Image-Generation Skill instead. User agreed.
+- Reviewed existing project (Coloring Book PDF Generator with 2 tabs). The coloring book uses `zai.images.generations.create({ prompt, size: "1024x1024" })` from z-ai-web-dev-sdk — same SDK & quality profile reused for this feature.
+- Invoked `image-generation` skill for guidance on supported sizes & best practices.
+- Created `/api/generate-image/route.ts`:
+  - POST endpoint using z-ai-web-dev-sdk
+  - 7 supported sizes (1024x1024 default, plus portrait/landscape/wide variants)
+  - 10 curated style presets (Auto, Realistic, Digital Art, Anime, Oil, Watercolor, 3D, Minimalist, Coloring Page, Fantasy, Cyberpunk)
+  - Negative prompt + "enhance" quality-booster support
+  - Returns data-uri (PNG) so the frontend can render + download without extra fetch
+  - GET endpoint exposes supported sizes/styles for dynamic UI building
+  - Graceful error handling (400 for bad input, 429 for quota/rate-limits, 500 otherwise)
+- Built `src/components/image-generator.tsx` (new):
+  - Two-column responsive layout (controls left, output right)
+  - Hero banner with gradient + badges ("1024×1024 default", "10 style presets", "Saved locally")
+  - Prompt textarea with character counter (2000 max, warns at 1800)
+  - ⌘/Ctrl+Enter keyboard shortcut to generate
+  - Style preset chips (emoji + label, themed active state)
+  - Size selector grid (7 sizes, "Popular" badges, dark active state)
+  - Advanced settings (collapsible): negative prompt + "Quality booster" toggle
+  - Generate button with loading spinner + state-aware label
+  - 8 prompt-idea chips for inspiration
+  - Latest result panel: image with hover-to-maximize, action bar (Download/Regenerate/Copy prompt/Share)
+  - Prompt display panel with style label + seed + timestamp
+  - Loading state: shimmer animation + spinner
+  - Error state: red card with retry button
+  - Empty state: dashed placeholder with icon
+  - History panel: grouped by date, hover-overlay (favorite/download/delete), favorite badge
+  - localStorage persistence (max 50 items, with quota-exceeded auto-trim)
+  - Full-size preview modal (Dialog) with image + metadata + actions
+  - Web Share API support (mobile share-as-file, desktop copy-prompt fallback)
+  - Framer Motion entrance + exit animations
+- Added third tab "AI Image Gen" (amber/orange gradient) to `src/app/page.tsx`, alongside existing "Coloring Book PDF" (pink) and "Edit PDF" (purple).
+- Clean lint (0 errors, 0 warnings) after auto-fix of unused eslint directives.
+- Verified end-to-end with agent-browser + VLM:
+  - Opened AI Image Gen tab → all controls render
+  - Filled prompt "A cute baby fox sitting on a mossy log in an autumn forest, golden hour sunlight"
+  - Selected "🖍️ Coloring Page" style preset
+  - Clicked Generate Image → button switched to "Generating…" with shimmer animation
+  - API POST /api/generate-image returned HTTP 200 after 57s (SDK cold-start + image generation)
+  - Image successfully rendered in "Latest result" panel with Download/Regenerate/Copy prompt/Share buttons
+  - Clicked Download → toast notification "Downloaded" with filename
+  - History panel showed "History (1)" — image saved to localStorage
+  - VLM confirmed: high-quality baby fox illustration visible, UI polished & complete
+- Improved "Coloring Page" style preset: switched from suffix-appended to prefix-prepended line-art instructions so the B&W outline style takes priority over descriptive scene language in the user's prompt.
+
+Stage Summary:
+- **Status: FEATURE COMPLETE & VERIFIED**
+- New "AI Image Gen" tab on `/` route, accessible via Preview Panel
+- Same z-ai-web-dev-sdk + 1024×1024 default as the coloring books
+- 10 style presets, 7 image sizes, negative prompts, quality booster, history (localStorage), favorites, full-size preview modal, Web Share API, keyboard shortcuts
+- All existing features (coloring book library, PDF editor, merge, covers, etc.) remain untouched
+- Clean lint, no runtime errors
+- Key new files:
+  - `src/app/api/generate-image/route.ts`
+  - `src/components/image-generator.tsx`
+  - `src/app/page.tsx` (added third tab)
