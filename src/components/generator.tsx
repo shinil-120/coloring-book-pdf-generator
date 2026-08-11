@@ -22,8 +22,11 @@ import {
   DollarSign,
   Image as ImageIcon,
   ChevronDown,
+  ChevronsUpDown,
   RefreshCw,
   FilePlus2,
+  History,
+  Trash2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -34,12 +37,18 @@ import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from "@/components/ui/command";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Slider } from "@/components/ui/slider";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -52,6 +61,13 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 
 // ─────────────────────────────────────────────────────────────────────────
@@ -172,6 +188,23 @@ interface ItemState {
   error?: string;
 }
 
+// A single generation history entry — persisted to localStorage so users
+// can see what they've generated across sessions and re-select that category.
+interface HistoryEntry {
+  id: string;
+  categorySlug: string;
+  categoryName: string;
+  categoryEmoji: string;
+  itemCount: number;
+  quality: string;
+  totalCostUsd: number;
+  successCount: number;
+  failedCount: number;
+  skippedCount: number;
+  providerLabel: string;
+  timestamp: string; // ISO
+}
+
 // ─────────────────────────────────────────────────────────────────────────
 // Constants
 // ─────────────────────────────────────────────────────────────────────────
@@ -244,6 +277,7 @@ export function Generator() {
   const [categoriesLoading, setCategoriesLoading] = useState(true);
   const [categoriesError, setCategoriesError] = useState<string | null>(null);
   const [selectedSlug, setSelectedSlug] = useState<string>("");
+  const [categoryComboboxOpen, setCategoryComboboxOpen] = useState(false);
   const [categoryItems, setCategoryItems] = useState<Item[]>([]);
   const [itemsLoading, setItemsLoading] = useState(false);
   const [itemsError, setItemsError] = useState<string | null>(null);
@@ -281,6 +315,12 @@ export function Generator() {
   // ─── Manage modals ───
   const [manageCategoriesOpen, setManageCategoriesOpen] = useState(false);
   const [manageProvidersOpen, setManageProvidersOpen] = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
+
+  // ─── Generation history (localStorage) ───
+  // Each entry records a successful generation run so the user can see
+  // what they've generated across sessions and re-select that category.
+  const [history, setHistory] = useState<HistoryEntry[]>([]);
 
   // ─── Refs ───
   const cancelRef = useRef(false);
@@ -387,6 +427,59 @@ export function Generator() {
       }
       return next;
     });
+  }, []);
+
+  // ─── Load generation history from localStorage ───
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem("generator-history");
+      if (raw) {
+        const parsed = JSON.parse(raw);
+        if (Array.isArray(parsed)) {
+          setHistory(parsed.slice(0, 50));
+        }
+      }
+    } catch {
+      // ignore parse errors
+    }
+  }, []);
+
+  // ─── Record a generation run in history (called after generate completes) ───
+  const recordHistoryEntry = useCallback((entry: Omit<HistoryEntry, "id" | "timestamp">) => {
+    const full: HistoryEntry = {
+      ...entry,
+      id: `gen-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      timestamp: new Date().toISOString(),
+    };
+    setHistory((prev) => {
+      const next = [full, ...prev].slice(0, 50);
+      try {
+        localStorage.setItem("generator-history", JSON.stringify(next));
+      } catch {
+        // localStorage may be full — drop oldest entries
+        let trimmed = next;
+        while (trimmed.length > 0) {
+          try {
+            localStorage.setItem("generator-history", JSON.stringify(trimmed));
+            break;
+          } catch {
+            trimmed = trimmed.slice(0, -1);
+          }
+        }
+      }
+      return next;
+    });
+  }, []);
+
+  // ─── Clear generation history ───
+  const clearHistory = useCallback(() => {
+    setHistory([]);
+    try {
+      localStorage.removeItem("generator-history");
+    } catch {
+      // noop
+    }
+    toast.success("History cleared");
   }, []);
 
   // ─── When category changes, fetch items ───
@@ -669,6 +762,24 @@ export function Generator() {
         toast.success("Generation complete!", {
           description: `Total cost: $${processedCost.toFixed(3)}`,
         });
+
+        // Record this run in history (localStorage)
+        const successCount = itemStates.filter((s) => s.status === "success").length;
+        const skippedCount = itemStates.filter((s) => s.status === "skipped").length;
+        const failedCount = itemStates.filter((s) => s.status === "failed").length;
+        const providerLabel = itemStates.find((s) => s.providerLabel)?.providerLabel ?? "Multiple";
+        recordHistoryEntry({
+          categorySlug: selectedSlug,
+          categoryName: selectedCategory?.name ?? selectedSlug,
+          categoryEmoji: selectedCategory?.emoji ?? "📦",
+          itemCount: itemStates.length,
+          quality,
+          totalCostUsd: processedCost,
+          successCount,
+          skippedCount,
+          failedCount,
+          providerLabel,
+        });
       }
     } catch (err) {
       toast.error("Generation failed", {
@@ -679,7 +790,7 @@ export function Generator() {
       setCurrentItemIdx(-1);
       fetchBudget();
     }
-  }, [selectedSlug, selectedItemNames, providers, quality, resumeMode, fetchBudget, recordRecentCategory]);
+  }, [selectedSlug, selectedItemNames, providers, quality, resumeMode, fetchBudget, recordRecentCategory, recordHistoryEntry, itemStates, selectedCategory]);
 
   const handleCancel = useCallback(() => {
     cancelRef.current = true;
@@ -836,6 +947,20 @@ export function Generator() {
                     >
                       <ShieldCheck className="h-3 w-3" /> Providers
                     </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setHistoryOpen(true)}
+                      className="h-8 gap-1.5 rounded-full border-violet-200 bg-white/80 px-3 text-[11px] font-bold text-violet-700 hover:bg-violet-50"
+                    >
+                      <History className="h-3 w-3" /> History
+                      {history.length > 0 && (
+                        <span className="ml-0.5 rounded-full bg-violet-500 px-1.5 py-0.5 text-[9px] font-bold text-white">
+                          {history.length}
+                        </span>
+                      )}
+                    </Button>
                   </div>
                 </div>
                 <p className="mt-1 text-sm leading-snug text-stone-600">
@@ -880,22 +1005,67 @@ export function Generator() {
             ) : categories.length === 0 ? (
               <p className="text-xs text-stone-500">No categories available.</p>
             ) : (
-              <Select value={selectedSlug} onValueChange={setSelectedSlug}>
-                <SelectTrigger className="h-11 w-full rounded-xl border-stone-200 bg-white">
-                  <SelectValue placeholder="Pick a category…" />
-                </SelectTrigger>
-                <SelectContent>
-                  {categories.map((c) => (
-                    <SelectItem key={c.slug} value={c.slug}>
-                      <span className="mr-2">{c.emoji}</span>
-                      <span className="font-semibold">{c.name}</span>
-                      <span className="ml-2 text-xs text-stone-500">
-                        ({c.itemCount})
+              <Popover open={categoryComboboxOpen} onOpenChange={setCategoryComboboxOpen}>
+                <PopoverTrigger asChild>
+                  <button
+                    type="button"
+                    role="combobox"
+                    aria-expanded={categoryComboboxOpen}
+                    aria-controls="category-combobox-list"
+                    className="flex h-11 w-full items-center justify-between gap-2 rounded-xl border border-stone-200 bg-white px-3 text-left text-sm shadow-sm transition-colors hover:border-stone-300 focus:outline-none focus:ring-2 focus:ring-rose-200"
+                  >
+                    {selectedCategory ? (
+                      <span className="flex min-w-0 items-center gap-2">
+                        <span className="text-lg">{selectedCategory.emoji}</span>
+                        <span className="truncate font-semibold text-stone-800">
+                          {selectedCategory.name}
+                        </span>
+                        <span className="shrink-0 text-xs text-stone-500">
+                          ({selectedCategory.itemCount})
+                        </span>
                       </span>
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                    ) : (
+                      <span className="text-stone-400">Pick a category…</span>
+                    )}
+                    <ChevronsUpDown className="h-4 w-4 shrink-0 text-stone-400" />
+                  </button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+                  <Command className="rounded-xl">
+                    <CommandInput placeholder="Search 137 categories…" className="h-9" />
+                    <CommandList id="category-combobox-list" className="max-h-[280px]">
+                      <CommandEmpty>No category found.</CommandEmpty>
+                      <CommandGroup heading="Categories" className="text-[10px] font-bold uppercase tracking-wide text-stone-400">
+                        {categories.map((c) => (
+                          <CommandItem
+                            key={c.slug}
+                            value={`${c.name} ${c.emoji} ${c.description}`}
+                            onSelect={() => {
+                              setSelectedSlug(c.slug);
+                              setCategoryComboboxOpen(false);
+                            }}
+                            className="gap-2 py-2"
+                          >
+                            <Check
+                              className={cn(
+                                "h-4 w-4 shrink-0",
+                                selectedSlug === c.slug ? "opacity-100 text-rose-500" : "opacity-0"
+                              )}
+                            />
+                            <span className="text-base">{c.emoji}</span>
+                            <span className="flex-1 truncate font-semibold text-stone-800">
+                              {c.name}
+                            </span>
+                            <span className="shrink-0 text-xs text-stone-500">
+                              ({c.itemCount})
+                            </span>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
             )}
             {selectedCategory && (
               <div className="mt-3 rounded-xl border border-stone-100 bg-stone-50/60 p-3">
@@ -1702,6 +1872,109 @@ export function Generator() {
         onOpenChange={setManageProvidersOpen}
         onChanged={handleManageProvidersChanged}
       />
+
+      {/* Generation History modal */}
+      <Dialog open={historyOpen} onOpenChange={setHistoryOpen}>
+        <DialogContent className="max-h-[88vh] overflow-hidden rounded-3xl border-stone-200 p-0 sm:max-w-2xl">
+          <DialogHeader className="border-b border-stone-100 px-6 pt-6 pb-4">
+            <DialogTitle className="flex items-center gap-2 text-lg font-extrabold text-stone-800">
+              <History className="h-5 w-5 text-violet-500" />
+              Generation History
+            </DialogTitle>
+            <DialogDescription className="text-xs text-stone-500">
+              Your last {history.length} generation{history.length === 1 ? "" : "s"} (stored in your browser, max 50).
+              Click a row to re-select that category.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="max-h-[68vh] overflow-y-auto px-6 py-4">
+            {history.length === 0 ? (
+              <div className="flex flex-col items-center justify-center gap-3 rounded-2xl border-2 border-dashed border-stone-200 bg-stone-50/60 p-10 text-center">
+                <div className="flex h-14 w-14 items-center justify-center rounded-full bg-gradient-to-br from-violet-100 to-rose-100">
+                  <History className="h-7 w-7 text-violet-400" />
+                </div>
+                <p className="text-sm font-bold text-stone-700">No history yet</p>
+                <p className="max-w-sm text-xs text-stone-500">
+                  Generate some coloring pages and your past runs will appear here —
+                  so you can quickly re-select a category or see how much you&apos;ve spent.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {history.map((entry) => {
+                  const date = new Date(entry.timestamp);
+                  const dateStr = date.toLocaleDateString(undefined, {
+                    month: "short",
+                    day: "numeric",
+                    year: "numeric",
+                  });
+                  const timeStr = date.toLocaleTimeString(undefined, {
+                    hour: "numeric",
+                    minute: "2-digit",
+                  });
+                  return (
+                    <button
+                      key={entry.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedSlug(entry.categorySlug);
+                        setHistoryOpen(false);
+                        toast.info(`Re-selected "${entry.categoryName}"`, {
+                          description: "Pick items and click Generate to continue",
+                        });
+                      }}
+                      className="group flex w-full items-center gap-3 rounded-2xl border border-stone-200 bg-white p-3 text-left transition-all hover:border-violet-200 hover:bg-violet-50/40 hover:shadow-sm"
+                    >
+                      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-stone-100 text-xl">
+                        {entry.categoryEmoji}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <p className="truncate text-sm font-bold text-stone-800">
+                            {entry.categoryName}
+                          </p>
+                          <Badge variant="secondary" className="shrink-0 bg-stone-100 text-[9px] text-stone-600">
+                            {entry.quality}
+                          </Badge>
+                        </div>
+                        <p className="mt-0.5 text-[11px] text-stone-500">
+                          {dateStr} at {timeStr} · {entry.itemCount} items · via {entry.providerLabel}
+                        </p>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <p className="text-sm font-bold tabular-nums text-stone-800">
+                          ${entry.totalCostUsd.toFixed(3)}
+                        </p>
+                        <p className="text-[10px] text-stone-500">
+                          {entry.successCount}✓
+                          {entry.skippedCount > 0 && ` · ${entry.skippedCount}↷`}
+                          {entry.failedCount > 0 && ` · ${entry.failedCount}✗`}
+                        </p>
+                      </div>
+                    </button>
+                  );
+                })}
+
+                <div className="pt-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => {
+                      if (confirm(`Clear all ${history.length} history entries? This cannot be undone.`)) {
+                        clearHistory();
+                      }
+                    }}
+                    className="h-8 gap-1.5 text-xs text-stone-500 hover:bg-rose-50 hover:text-rose-600"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" /> Clear history
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        </DialogContent>
+      </Dialog>
     </TooltipProvider>
   );
 }

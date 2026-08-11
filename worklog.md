@@ -1312,3 +1312,79 @@ Stage Summary:
   - Bulk delete items in item editor
   - Export/import category as JSON (share with others)
   - Add a search bar to the category dropdown (currently 137 items to scroll)
+
+---
+Task ID: cron-review-3
+Agent: Z.ai Code (webDevReview cron — round 3)
+Task: Assess project status, perform QA testing via agent-browser, fix bugs, add features and styling improvements.
+
+Work Log:
+- Reviewed worklog (1314 lines) — round 2 added 4 features (recently used, Test all, onboarding, duplicate)
+- Verified env intact (.env.local + db/categories.db present), clean lint, all routes return 200
+- QA tested with agent-browser: Generator tab renders, 137 categories load, all modals work
+
+Features added this round:
+
+1. **Searchable category combobox** (critical UX fix for 137 categories)
+   - Replaced the basic Radix `<Select>` with a Popover + Command (cmdk) searchable combobox
+   - Search input at the top filters by name, emoji, AND description (e.g. typing "ocean" matches "Ocean Animals" + "Deep Sea Creatures" + "Tropical Fish")
+   - Shows all 137 categories in a scrollable list (max-height 280px)
+   - Each item shows: checkmark (if selected), emoji, name, item count
+   - ChevronsUpDown icon in the trigger button (replaces ChevronDown)
+   - Selected category shows in trigger with emoji + name + count
+   - Added `aria-controls` + `id` on the CommandList for a11y compliance
+   - Removed unused Select imports (Select, SelectContent, SelectItem, SelectTrigger, SelectValue)
+
+2. **Generation History modal** (full implementation)
+   - New "History" button in the hero (violet theme, next to Categories + Providers)
+   - Badge on the button showing history count (e.g. "3") when > 0
+   - `HistoryEntry` type: { id, categorySlug, categoryName, categoryEmoji, itemCount, quality, totalCostUsd, successCount, skippedCount, failedCount, providerLabel, timestamp }
+   - Persists to localStorage (`generator-history` key, max 50 entries)
+   - Auto-records after every successful generation run (in handleGenerate)
+   - Each entry shows: category emoji, name, quality badge, date/time, item count, provider, total cost, success/skipped/failed counts
+   - Click a row → re-selects that category + closes the modal + toast notification
+   - "Clear history" button with confirmation prompt
+   - Empty state with friendly icon + instructions
+   - Quota-safe localStorage writes: if storage is full, drops oldest entries and retries
+
+3. **History button badge** — shows count of past generations on the violet History button
+   - Small violet pill badge with white number
+   - Only appears when history.length > 0
+   - Visual indicator that there's history to review
+
+Styling improvements:
+- Combobox uses the same pink/rose theme (focus:ring-rose-200, hover:border-stone-300)
+- History button uses violet theme to distinguish from Categories (amber) and Providers (rose)
+- History entries use hover effect (border-violet-200, bg-violet-50/40) for clear interactivity
+- Success/skipped/failed counts use unicode symbols (✓, ↷, ✗) for compact display
+- Tabular numbers for cost alignment
+- Empty states use gradient backgrounds (violet-100 → rose-100)
+
+QA verification (agent-browser):
+- Generator tab renders with all 4 hero buttons (Categories, Providers, History, Manage)
+- Category combobox opens with search input — "Search 137 categories…" placeholder
+- History modal opens with "No history yet" empty state (since no generations yet)
+- All API routes return 200: /api/categories, /api/budget, /api/providers
+- Clean lint (0 errors, 0 warnings) — fixed a11y warning by adding aria-controls + id
+- No runtime errors in dev.log
+
+Stage Summary:
+- **Status: STABLE, 3 NEW FEATURES ADDED**
+- Features implemented from round-2 "next opportunities" list:
+  ✅ Searchable category dropdown (replaced basic Select with Popover+Command)
+  ✅ Generation history view (localStorage, click-to-reselect, clear button)
+  ✅ History count badge on the History button
+- Remaining from the list (for future rounds):
+  - Per-item palette editing in the item editor (visual color picker)
+  - Bulk delete items in item editor
+  - Export/import category as JSON (share with others)
+  - "Recent items" quick-access (across categories)
+- Key modified files:
+  - `src/components/generator.tsx` — searchable combobox + history modal + HistoryEntry type
+- Next opportunities (for round 4):
+  - Per-item palette editor (visual color picker for each item)
+  - Bulk delete items in item editor (select multiple + delete)
+  - Export/import category as JSON (share custom categories)
+  - Generation stats dashboard (charts of spend over time)
+  - Keyboard shortcut for opening history (Ctrl+H)
+  - Recently generated items quick-access (across categories)
