@@ -48,6 +48,7 @@ const CATEGORY_SUFFIX: Record<string, string> = {
   "Musical Instruments": "musical instrument",
   "Indian Mythology": "Hindu deity",
   Food: "food dish",
+  "World Landmarks": "famous landmark",
 };
 
 export function categorySuffix(category: string): string {
@@ -283,6 +284,22 @@ export const BOOKS: ColoringBook[] = [
     items: [
       "Omelette", "Waffles", "Fried Chicken", "Hot Dog", "Croissant",
       "Red Velvet Cupcake", "Baklava", "Grilled Bacon", "Fish and Chips", "Samosa",
+    ],
+  },
+  {
+    name: "Around the World Landmarks Coloring Book",
+    slug: "World-Landmarks",
+    category: "World Landmarks",
+    description: "40 pages — no covers, no blanks",
+    items: [
+      "Eiffel Tower", "Big Ben", "Taj Mahal", "Pyramids of Giza", "Statue of Liberty",
+      "Colosseum", "Sydney Opera House", "Great Wall of China", "Leaning Tower of Pisa", "Christ the Redeemer",
+      "Stonehenge", "Mount Rushmore", "Burj Khalifa", "Golden Gate Bridge", "Tower Bridge",
+      "Machu Picchu", "Petra", "Parthenon", "St Basil Cathedral", "Neuschwanstein Castle",
+      "CN Tower", "Hollywood Sign", "Easter Island Moai", "Angkor Wat", "Hagia Sophia",
+      "Mont Saint Michel", "Sagrada Familia", "Chichen Itza", "Tokyo Tower", "Imperial Palace",
+      "Acropolis", "Edinburgh Castle", "Buckingham Palace", "White House", "Niagara Falls",
+      "Grand Canyon", "Northern Lights", "Imperial Palace Gate", "Trevi Fountain", "Pompeii Ruins",
     ],
   },
 ];
@@ -791,6 +808,48 @@ export const NATURAL_PALETTES: Record<string, Palette> = {
   "Grilled Bacon": [[200, 80, 50], [160, 50, 30], [240, 180, 130]],  // red meat + dark + light fat
   "Fish and Chips": [[255, 200, 100], [220, 160, 60], [255, 230, 150]], // golden fried fish + dark + light chips
   Samosa: [[220, 170, 90], [180, 130, 60], [240, 200, 130]],         // golden pastry + dark + light
+
+  // ---- World Landmarks ----
+  "Eiffel Tower": [[140, 130, 110], [100, 90, 75], [180, 170, 150]],   // iron brown + dark + light
+  "Big Ben": [[140, 120, 90], [100, 85, 60], [180, 160, 120]],         // stone + dark + light
+  "Taj Mahal": [[240, 240, 245], [200, 190, 180], [180, 160, 120]],    // white marble + shadow + gold
+  "Pyramids of Giza": [[220, 190, 120], [180, 150, 80], [245, 220, 160]], // sandstone + dark + light
+  "Statue of Liberty": [[80, 150, 130], [50, 110, 95], [130, 190, 170]], // patina green + dark + light
+  Colosseum: [[180, 150, 110], [140, 110, 75], [220, 195, 160]],       // travertine stone + dark + light
+  "Sydney Opera House": [[240, 245, 250], [180, 200, 220], [100, 150, 200]], // white sails + shadow + blue water
+  "Great Wall of China": [[160, 130, 90], [120, 95, 60], [200, 175, 130]], // stone wall + dark + light
+  "Leaning Tower of Pisa": [[230, 220, 200], [190, 175, 150], [250, 240, 225]], // white marble + dark + light
+  "Christ the Redeemer": [[220, 220, 225], [170, 170, 180], [120, 150, 200]], // grey stone + dark + blue sky
+  Stonehenge: [[160, 155, 145], [120, 115, 105], [200, 195, 185]],     // grey stone + dark + light
+  "Mount Rushmore": [[170, 160, 145], [130, 120, 105], [210, 200, 185]], // granite + dark + light
+  "Burj Khalifa": [[180, 200, 220], [130, 160, 200], [220, 235, 250]], // glass blue + dark + light
+  "Golden Gate Bridge": [[220, 70, 30], [180, 50, 20], [255, 140, 90]], // international orange + dark + light
+  "Tower Bridge": [[180, 140, 60], [130, 100, 40], [220, 190, 100]],   // stone + dark + gold
+  "Machu Picchu": [[150, 130, 100], [110, 95, 70], [200, 180, 145]],   // grey stone ruins + dark + green
+  Petra: [[200, 130, 80], [160, 95, 50], [240, 180, 130]],             // rose-red rock + dark + light
+  Parthenon: [[230, 225, 210], [190, 180, 160], [250, 245, 235]],      // white marble + dark + light
+  "St Basil Cathedral": [[220, 80, 60], [80, 130, 200], [255, 200, 50]], // red + blue + gold domes
+  "Neuschwanstein Castle": [[200, 200, 220], [120, 100, 80], [80, 130, 180]], // white castle + brown + blue sky
+  "CN Tower": [[180, 180, 190], [120, 120, 135], [220, 220, 235]],     // grey concrete + dark + light
+  "Hollywood Sign": [[255, 255, 255], [120, 90, 60], [100, 130, 80]],  // white letters + brown hill + green
+  "Easter Island Moai": [[140, 130, 115], [100, 90, 75], [180, 170, 150]], // grey volcanic rock + dark + light
+  "Angkor Wat": [[180, 150, 90], [130, 110, 60], [220, 195, 140]],     // sandstone + dark + light
+  "Hagia Sophia": [[200, 180, 130], [150, 130, 80], [240, 225, 190]],  // golden stone + dark + light
+  "Mont Saint Michel": [[220, 215, 200], [150, 140, 120], [120, 150, 200]], // cream stone + dark + blue
+  "Sagrada Familia": [[220, 190, 120], [170, 140, 80], [250, 230, 180]], // sandy stone + dark + light
+  "Chichen Itza": [[190, 165, 110], [140, 120, 75], [230, 210, 165]],  // limestone + dark + light
+  "Tokyo Tower": [[230, 70, 40], [180, 50, 25], [255, 150, 110]],      // red steel + dark + light
+  "Forbidden City": [[200, 50, 40], [255, 200, 50], [140, 80, 30]],    // red walls + gold roof + dark
+  Acropolis: [[220, 210, 190], [170, 160, 140], [250, 240, 225]],      // marble + dark + light
+  "Edinburgh Castle": [[130, 110, 90], [90, 75, 55], [170, 150, 125]], // dark stone + darker + light
+  "Buckingham Palace": [[220, 200, 160], [160, 130, 80], [250, 235, 210]], // cream stone + dark + light
+  "White House": [[245, 245, 240], [180, 180, 170], [120, 100, 70]],   // white + grey shadow + brown
+  "Niagara Falls": [[100, 160, 210], [60, 120, 180], [180, 220, 245]], // blue water + dark + mist
+  "Grand Canyon": [[200, 130, 70], [160, 95, 50], [240, 180, 120]],    // red rock + dark + light
+  "Northern Lights": [[80, 200, 150], [100, 120, 220], [180, 100, 200]], // green aurora + blue + purple
+  "Forbidden City Gate": [[200, 50, 40], [255, 200, 50], [140, 80, 30]], // red + gold + dark
+  "Trevi Fountain": [[220, 215, 200], [150, 150, 165], [100, 150, 200]], // cream stone + grey + blue water
+  "Pompeii Ruins": [[180, 150, 110], [130, 105, 70], [220, 195, 155]], // stone ruins + dark + light
 };
 
 // ---------------------------------------------------------------------------
@@ -1048,6 +1107,12 @@ const CATEGORY_THEMES: Record<string, CategoryTheme> = {
     badgeBg: "bg-rose-50 border-rose-200",
     badgeText: "text-rose-700",
     emoji: "🍳",
+  },
+  "World Landmarks": {
+    gradient: "from-teal-400 to-cyan-500",
+    badgeBg: "bg-teal-50 border-teal-200",
+    badgeText: "text-teal-700",
+    emoji: "🗽",
   },
 };
 

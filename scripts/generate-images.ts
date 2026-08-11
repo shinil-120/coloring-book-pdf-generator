@@ -228,10 +228,9 @@ function getAvailableProviders(): Provider[] {
     providers.push({ name: "Replicate", envKey: "REPLICATE_API_TOKEN", priority: 3, generate: generateWithReplicate });
   }
 
-  // Z.AI — current provider (free tier)
-  if (hasKey("ZAI_API_KEY")) {
-    providers.push({ name: "Z.AI", envKey: "ZAI_API_KEY", priority: 4, generate: generateWithZAI });
-  }
+  // Z.AI — current provider (free tier, auto-authenticated in Z.ai Code environment)
+  // The SDK auto-authenticates without an explicit key, so always include it
+  providers.push({ name: "Z.AI", envKey: "ZAI_API_KEY", priority: 4, generate: generateWithZAI });
 
   // OpenAI DALL-E 3 — most expensive ($0.04/image)
   if (hasKey("OPENAI_API_KEY")) {
@@ -462,7 +461,7 @@ async function main() {
         providerStats[result.provider] = (providerStats[result.provider] || 0) + 1;
       }
       console.log(`   ${result.ok ? "✓" : "✗"} ${item} [${done}/${items.length}]${result.provider ? ` via ${result.provider}` : ""}`);
-    });
+    }, CONCURRENCY);
 
     console.log(`\n  ${book.slug}: ${done - failed} ok, ${failed} failed`);
     totalOk += done - failed;
