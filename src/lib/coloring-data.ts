@@ -49,6 +49,7 @@ const CATEGORY_SUFFIX: Record<string, string> = {
   "Indian Mythology": "Hindu deity",
   Food: "food dish",
   "World Landmarks": "famous landmark",
+  "Unicorns & Fairies": "magical fairy creature",
 };
 
 export function categorySuffix(category: string): string {
@@ -300,6 +301,15 @@ export const BOOKS: ColoringBook[] = [
       "Mont Saint Michel", "Sagrada Familia", "Chichen Itza", "Tokyo Tower", "Imperial Palace",
       "Acropolis", "Edinburgh Castle", "Buckingham Palace", "White House", "Niagara Falls",
       "Grand Canyon", "Northern Lights", "Imperial Palace Gate", "Trevi Fountain", "Pompeii Ruins",
+    ],
+  },
+  {
+    name: "Magical Unicorns & Fairies Coloring Book",
+    slug: "Unicorns-Fairies",
+    category: "Unicorns & Fairies",
+    description: "3 pages — no covers, no blanks",
+    items: [
+      "Unicorn Rainbow", "Fairy Garden", "Pegasus Cloud Castle",
     ],
   },
 ];
@@ -850,6 +860,11 @@ export const NATURAL_PALETTES: Record<string, Palette> = {
   "Forbidden City Gate": [[200, 50, 40], [255, 200, 50], [140, 80, 30]], // red + gold + dark
   "Trevi Fountain": [[220, 215, 200], [150, 150, 165], [100, 150, 200]], // cream stone + grey + blue water
   "Pompeii Ruins": [[180, 150, 110], [130, 105, 70], [220, 195, 155]], // stone ruins + dark + light
+
+  // ---- Unicorns & Fairies ----
+  "Unicorn Rainbow": [[255, 180, 220], [255, 220, 100], [180, 200, 255]], // pink body + golden horn + blue rainbow
+  "Fairy Garden": [[120, 180, 80], [255, 180, 220], [255, 220, 100]],   // green garden + pink fairy + gold flowers
+  "Pegasus Cloud Castle": [[200, 220, 255], [255, 255, 255], [200, 150, 220]], // sky blue + white clouds + purple castle
 };
 
 // ---------------------------------------------------------------------------
@@ -1113,6 +1128,12 @@ const CATEGORY_THEMES: Record<string, CategoryTheme> = {
     badgeBg: "bg-teal-50 border-teal-200",
     badgeText: "text-teal-700",
     emoji: "🗽",
+  },
+  "Unicorns & Fairies": {
+    gradient: "from-pink-400 to-purple-500",
+    badgeBg: "bg-pink-50 border-pink-200",
+    badgeText: "text-pink-700",
+    emoji: "🦄",
   },
 };
 
