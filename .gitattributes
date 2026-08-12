@@ -1,0 +1,3 @@
+# Prevent shell globbing issues with bracket paths like [id]
+# by ensuring git treats them literally
+* text=auto
