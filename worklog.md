@@ -1427,3 +1427,51 @@ Stage Summary:
 - Normal startup is instant (~6ms) when DB exists
 - Re-seed only triggers when DB is missing or empty (~1 second)
 - User will never see "No categories available" again, even after sandbox cleanup
+
+---
+Task ID: seed-from-ui
+Agent: Z.ai Code (user-requested feature)
+Task: Add a "Seed Database" button to the web UI so users can seed production Turso from any browser (including an Android phone) without needing to run the CLI script locally.
+
+Work Log:
+- User is deploying to Vercel from an Android phone — can't run `bun run scripts/seed-categories.ts` locally
+- Extracted the 137-category seed data + seeding logic from `scripts/seed-categories.ts` into a new reusable module: `src/lib/seed-categories-data.ts`
+  - Exports: `CATEGORIES` array, `SeedCategory` type, `ThemeColor` type, `runSeeder()` function
+  - `runSeeder()` returns a structured `SeedResult` (success, totalCategories, totalItems, skipped, failed, errors, durationMs, alreadySeeded)
+  - Idempotent + resumable (same logic as the CLI script)
+- Updated `scripts/seed-categories.ts` to import from the new module (CLI still works identically, now shows completion time)
+- Created `/api/admin/seed/route.ts`:
+  - POST: calls `runSeeder()` server-side, returns JSON result
+  - GET: returns current seed status (categoryCount, needsSeeding)
+  - `maxDuration = 60` for Vercel (seeding 137 categories takes ~30s on cold start)
+  - Returns 503 if Turso not configured (with helpful message about adding env vars)
+- Added "Seed DB" button to Manage Categories modal header:
+  - Green/emerald themed (Database icon from lucide-react)
+  - Loading state shows spinner + "Seeding…"
+  - Confirmation prompt before seeding
+  - Success/error banner below the header showing the result
+  - Toast notification with details (categories, items, duration)
+  - Auto-refreshes the category list after seeding
+- Files created/modified:
+  - NEW: `src/lib/seed-categories-data.ts` (2,544 lines — data + runSeeder function)
+  - NEW: `src/app/api/admin/seed/route.ts` (POST + GET endpoints)
+  - MODIFIED: `scripts/seed-categories.ts` (now imports from seed-categories-data.ts)
+  - MODIFIED: `src/components/manage-categories.tsx` (added Seed DB button + handler + result banner)
+
+Verification:
+- CLI seeder still works: `bun run scripts/seed-categories.ts` → "✨ Done. Seeded 137 categories (0 skipped) with 5429 items total. ⏱ Completed in 0.6s"
+- GET /api/admin/seed → returns `{success: true, configured: true, categoryCount: 137, needsSeeding: false}`
+- POST /api/admin/seed (already seeded) → returns `{success: true, alreadySeeded: true, skipped: 137, durationMs: 14}`
+- POST /api/admin/seed (empty DB) → seeds all 137 categories (tested locally)
+- UI: "Seed DB" button visible in Manage Categories modal header (confirmed via agent-browser)
+- Clean lint (0 errors, 0 warnings)
+
+Stage Summary:
+- **Status: SEED-FROM-UI FEATURE COMPLETE**
+- Users can now seed production Turso from any browser (phone, tablet, PC)
+- No CLI access needed — works on Vercel after deploying
+- Idempotent: clicking "Seed DB" multiple times is safe (skips existing categories)
+- The GET endpoint lets the UI check if seeding is needed before showing the button
+- Key new files:
+  - `src/lib/seed-categories-data.ts` (reusable module)
+  - `src/app/api/admin/seed/route.ts` (API endpoint)

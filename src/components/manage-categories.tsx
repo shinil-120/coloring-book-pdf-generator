@@ -36,6 +36,7 @@ import {
   Library,
   ChevronRight,
   Copy,
+  Database,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -283,6 +284,16 @@ export function ManageCategories({ open, onOpenChange, onChanged }: Props) {
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingCategory, setEditingCategory] = useState<Category | null>(null);
 
+  // ─── Seed Database state (lets users seed production Turso from the UI) ───
+  const [seeding, setSeeding] = useState(false);
+  const [seedResult, setSeedResult] = useState<{
+    success: boolean;
+    message: string;
+    totalCategories?: number;
+    totalItems?: number;
+    durationMs?: number;
+  } | null>(null);
+
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 3 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 120, tolerance: 5 } }),
@@ -408,18 +419,100 @@ export function ManageCategories({ open, onOpenChange, onChanged }: Props) {
     [onChanged]
   );
 
+  // ─── Seed Database (lets users seed production Turso from any browser) ───
+  // Calls POST /api/admin/seed which runs the full 137-category seeder
+  // server-side. Essential for users deploying to Vercel from a phone
+  // (where running `bun run scripts/seed-categories.ts` locally isn't possible).
+  const handleSeed = useCallback(async () => {
+    if (
+      !confirm(
+        "Seed the database with 137 built-in categories (5,429 items)?\n\n" +
+        "This is idempotent — existing categories won't be duplicated. " +
+        "Takes ~30 seconds on first run."
+      )
+    ) {
+      return;
+    }
+    setSeeding(true);
+    setSeedResult(null);
+    try {
+      const res = await fetch("/api/admin/seed", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data?.error || `HTTP ${res.status}`);
+      }
+      setSeedResult({
+        success: true,
+        message: data.message || "Seeding complete",
+        totalCategories: data.totalCategories,
+        totalItems: data.totalItems,
+        durationMs: data.durationMs,
+      });
+      toast.success(data.message || "Database seeded", {
+        description:
+          data.alreadySeeded
+            ? "All 137 categories were already present"
+            : `${data.totalCategories} categories · ${data.totalItems} items · ${(data.durationMs / 1000).toFixed(1)}s`,
+      });
+      onChanged?.();
+      fetchCategories();
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : "Unknown error";
+      setSeedResult({ success: false, message: msg });
+      toast.error("Seeding failed", { description: msg });
+    } finally {
+      setSeeding(false);
+    }
+  }, [onChanged, fetchCategories]);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-h-[92vh] overflow-hidden rounded-3xl border-stone-200 p-0 sm:max-w-4xl">
         <DialogHeader className="border-b border-stone-100 px-6 pt-6 pb-4">
-          <DialogTitle className="flex items-center gap-2 text-lg font-extrabold text-stone-800">
-            <Library className="h-5 w-5 text-rose-500" />
-            Manage Categories
-          </DialogTitle>
-          <DialogDescription className="text-xs text-stone-500">
-            {categories.length} categories · {categories.reduce((s, c) => s + c.itemCount, 0)} items
-            total · Built-in categories can&apos;t be deleted, but can be edited.
-          </DialogDescription>
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0 flex-1">
+              <DialogTitle className="flex items-center gap-2 text-lg font-extrabold text-stone-800">
+                <Library className="h-5 w-5 text-rose-500" />
+                Manage Categories
+              </DialogTitle>
+              <DialogDescription className="mt-1 text-xs text-stone-500">
+                {categories.length} categories · {categories.reduce((s, c) => s + c.itemCount, 0)} items
+                total · Built-in categories can&apos;t be deleted, but can be edited.
+              </DialogDescription>
+            </div>
+            {/* Seed Database button — especially useful when deploying from a phone */}
+            <Button
+              type="button"
+              size="sm"
+              variant="outline"
+              onClick={handleSeed}
+              disabled={seeding}
+              className="shrink-0 gap-1.5 rounded-xl border-emerald-200 bg-emerald-50 px-3 text-[11px] font-bold text-emerald-700 hover:bg-emerald-100"
+            >
+              {seeding ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <Database className="h-3.5 w-3.5" />
+              )}
+              {seeding ? "Seeding…" : "Seed DB"}
+            </Button>
+          </div>
+
+          {/* Seed result banner */}
+          {seedResult && (
+            <Alert
+              className={cn(
+                "mt-3 py-2",
+                seedResult.success
+                  ? "border-emerald-200 bg-emerald-50 text-emerald-800"
+                  : "border-rose-200 bg-rose-50 text-rose-800"
+              )}
+            >
+              <AlertDescription className="text-[11px] font-medium">
+                {seedResult.success ? "✓" : "✗"} {seedResult.message}
+              </AlertDescription>
+            </Alert>
+          )}
         </DialogHeader>
 
         <div className="max-h-[70vh] overflow-y-auto px-6 py-4">
