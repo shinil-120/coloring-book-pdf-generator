@@ -59,31 +59,39 @@ export async function POST(
       });
     }
 
-    // For Z.AI: verify the key works by constructing the SDK instance
-    // (this catches invalid keys without generating an image)
+    // For Z.AI: actually test the key by calling the API directly
+    // (just a lightweight /models call — doesn't generate an image)
     if (provider.type === "zai") {
       try {
-        // Try to construct the ZAI instance — this validates the key format
-        // and would throw if the key is malformed. We don't make a network
-        // call to avoid generating an image (which costs credits).
-        const ZAI = (await import("z-ai-web-dev-sdk")).default;
-         
-        new ZAI({
-          baseUrl: "https://api.z.ai/api/paas/v4",
-          apiKey: process.env[provider.apiKeyEnv]!,
-        } as any);
-        return NextResponse.json({
-          success: true,
-          tested: true,
-          envVarSet: true,
-          message: `✓ ${provider.label}: Z.AI API key is set and valid format. Ready to generate!`,
+        const apiKey = process.env[provider.apiKeyEnv]!;
+        const testRes = await fetch("https://api.z.ai/api/paas/v4/models", {
+          headers: {
+            "Authorization": `Bearer ${apiKey}`,
+            "X-Z-AI-From": "Z",
+          },
         });
+        if (testRes.ok) {
+          return NextResponse.json({
+            success: true,
+            tested: true,
+            envVarSet: true,
+            message: `✓ ${provider.label}: Z.AI API key is valid and authenticated. Ready to generate!`,
+          });
+        } else {
+          const errText = await testRes.text().catch(() => "");
+          return NextResponse.json({
+            success: true,
+            tested: true,
+            envVarSet: true,
+            message: `✗ ${provider.label}: Z.AI rejected the key (HTTP ${testRes.status}). ${errText.slice(0, 150)}`,
+          });
+        }
       } catch (err) {
         return NextResponse.json({
           success: true,
           tested: true,
           envVarSet: true,
-          message: `✗ ${provider.label}: ${err instanceof Error ? err.message : "Z.AI key validation failed"}`,
+          message: `✗ ${provider.label}: ${err instanceof Error ? err.message : "Z.AI test failed"}`,
         });
       }
     }

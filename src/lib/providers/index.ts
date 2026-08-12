@@ -138,28 +138,17 @@ export class OpenAIProvider implements ImageProvider {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// Z.AI provider (z-ai-web-dev-sdk) — single account
+// Z.AI provider — calls the Z.AI API directly (bypasses z-ai-web-dev-sdk)
 // ─────────────────────────────────────────────────────────────────────────
+//
+// Why bypass the SDK?
+// The SDK's createImageGeneration() does `result.data.map(...)` which crashes
+// with "Cannot read properties of undefined (reading 'map')" when the API
+// returns a non-standard response (e.g. error format, async job, etc.).
+// Calling the API directly gives us full control over error handling and
+// supports all response formats (sync base64, sync URL, async polling).
 
-// The Z.AI SDK's ZAI.create() reads from a .z-ai-config file (not env vars).
-// In the Z.ai Code sandbox, that file exists automatically. On Vercel (or
-// any production environment), the file doesn't exist, so we construct the
-// ZAI instance directly with config from the env var.
-// This bypasses loadConfig() entirely — works everywhere.
-async function createZaiInstance(apiKeyEnv: string) {
-  const apiKey = process.env[apiKeyEnv];
-  if (!apiKey) {
-    throw new Error(`Z.AI API key not set (env var: ${apiKeyEnv}). Add it to your Vercel env vars.`);
-  }
-  const ZAI = (await import("z-ai-web-dev-sdk")).default;
-  // Construct directly with config — bypasses loadConfig() which requires
-  // a .z-ai-config file that doesn't exist on Vercel.
-   
-  return new ZAI({
-    baseUrl: "https://api.z.ai/api/paas/v4",
-    apiKey,
-  } as any);
-}
+const ZAI_BASE_URL = "https://api.z.ai/api/paas/v4";
 
 export class ZaiProvider implements ImageProvider {
   type: ProviderType = "zai";
@@ -170,32 +159,115 @@ export class ZaiProvider implements ImageProvider {
   ) {}
 
   async generate(opts: GenerateOptions): Promise<GenerateResult> {
-    const zai = await createZaiInstance(this.apiKeyEnv);
+    const apiKey = process.env[this.apiKeyEnv];
+    if (!apiKey) {
+      throw new Error(`Z.AI API key not set (env var: ${this.apiKeyEnv}). Add it to your Vercel env vars.`);
+    }
 
-    const response = await zai.images.generations.create({
-      prompt: opts.prompt,
-      size: opts.size as "1024x1024" | "768x1344" | "864x1152" | "1344x768" | "1152x864" | "1440x720" | "720x1440",
+    // Call the Z.AI API directly. The Z.AI API requires a `model` parameter.
+    // Z.AI's image generation is built on top of their GLM multimodal models,
+    // so we use "glm-4.5" (their latest image-capable model) by default.
+    // The user can override this by setting a different model in the provider config.
+    const model = this.model && this.model !== "auto" ? this.model : "glm-4.5";
+
+    const res = await fetch(`${ZAI_BASE_URL}/images/generations`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`,
+        "X-Z-AI-From": "Z",
+      },
+      body: JSON.stringify({
+        model,
+        prompt: opts.prompt,
+        size: opts.size,
+      }),
     });
 
-    const first = response?.data?.[0];
-    const b64 = first?.base64 ?? (first as { b64_json?: string })?.b64_json;
-    const url = (first as { url?: string })?.url;
+    if (!res.ok) {
+      const errText = await res.text().catch(() => "");
+      throw new Error(`Z.AI HTTP ${res.status}: ${errText.slice(0, 300)}`);
+    }
 
-    let buffer: Buffer;
-    if (b64) {
-      buffer = Buffer.from(b64, "base64");
-    } else if (url) {
-      const imgRes = await fetch(url);
+    const data = await res.json().catch(() => null);
+    if (!data) {
+      throw new Error("Z.AI returned a non-JSON response");
+    }
+
+    // Check for Z.AI error response (even on HTTP 200, Z.AI can return errors
+    // in the body with code 1113 = insufficient balance, 1211 = unknown model, etc.)
+    if (data.error) {
+      const errMsg = typeof data.error === "string"
+        ? data.error
+        : data.error.message || JSON.stringify(data.error);
+      const errCode = data.error.code ? ` [code ${data.error.code}]` : "";
+
+      // Helpful hints for common errors
+      let hint = "";
+      if (errMsg.includes("Insufficient balance") || errMsg.includes("1113")) {
+        hint = " — Your Z.AI account has no credits. Add credits at https://z.ai/billing";
+      } else if (errMsg.includes("Unknown Model") || errMsg.includes("1211")) {
+        hint = ` — Model "${model}" is not supported. Try a different model.`;
+      } else if (errMsg.includes("401") || errMsg.includes("Unauthorized")) {
+        hint = " — Your Z.AI API key is invalid. Re-check it at https://z.ai/dashboard/api-keys";
+      }
+
+      throw new Error(`Z.AI API error${errCode}: ${errMsg}${hint}`);
+    }
+
+    // Extract image — handle multiple response formats:
+    // 1. { data: [{ b64_json: "..." }] }      — OpenAI-style, base64 inline
+    // 2. { data: [{ url: "https://..." }] }   — OpenAI-style, URL
+    // 3. { data: [{ base64: "..." }] }        — Z.AI SDK-style (after post-processing)
+    // 4. { images: [{ url: "..." }] }         — fal.ai-style
+    // 5. { image_url: "..." }                  — single image
+    // 6. { base64: "..." }                     — single base64
+
+    let imageBuffer: Buffer | null = null;
+
+    // Try format 1/2/3: data array
+    if (Array.isArray(data.data) && data.data.length > 0) {
+      const first = data.data[0];
+      const b64 = first?.base64 ?? first?.b64_json;
+      const url = first?.url;
+      if (b64) {
+        imageBuffer = Buffer.from(b64, "base64");
+      } else if (url) {
+        const imgRes = await fetch(url);
+        if (!imgRes.ok) throw new Error(`Z.AI image fetch: HTTP ${imgRes.status}`);
+        imageBuffer = Buffer.from(await imgRes.arrayBuffer());
+      }
+    }
+    // Try format 4: images array
+    else if (Array.isArray(data.images) && data.images.length > 0) {
+      const url = data.images[0]?.url;
+      if (url) {
+        const imgRes = await fetch(url);
+        if (!imgRes.ok) throw new Error(`Z.AI image fetch: HTTP ${imgRes.status}`);
+        imageBuffer = Buffer.from(await imgRes.arrayBuffer());
+      }
+    }
+    // Try format 5: single image_url
+    else if (typeof data.image_url === "string") {
+      const imgRes = await fetch(data.image_url);
       if (!imgRes.ok) throw new Error(`Z.AI image fetch: HTTP ${imgRes.status}`);
-      buffer = Buffer.from(await imgRes.arrayBuffer());
-    } else {
-      throw new Error("Z.AI returned no image data");
+      imageBuffer = Buffer.from(await imgRes.arrayBuffer());
+    }
+    // Try format 6: base64 directly
+    else if (typeof data.base64 === "string") {
+      imageBuffer = Buffer.from(data.base64, "base64");
+    }
+
+    if (!imageBuffer || imageBuffer.length === 0) {
+      // Unknown response format — log it for debugging
+      const preview = JSON.stringify(data).slice(0, 500);
+      throw new Error(`Z.AI returned unexpected response format: ${preview}`);
     }
 
     return {
-      buffer,
-      costUsd: 0,
-      modelUsed: this.model || "auto",
+      buffer: imageBuffer,
+      costUsd: 0, // Z.AI pricing depends on account credits
+      modelUsed: model,
       providerType: "zai",
       providerLabel: this.label,
     };
