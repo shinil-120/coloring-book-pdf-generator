@@ -619,7 +619,28 @@ export async function generateWithFailover(
   );
 
   if (usable.length === 0) {
-    throw new Error("No usable image providers — add an API key in Manage Providers");
+    // Build a helpful diagnostic message explaining WHY no providers are usable
+    const total = providers.length;
+    const inactive = providers.filter((p) => !p.isActive).length;
+    const unconfigured = providers.filter((p) => p.isActive && !p.isConfigured).length;
+    const overLimit = providers.filter((p) => p.isActive && p.isConfigured && p.dailyLimit !== null && p.usedToday >= p.dailyLimit).length;
+
+    const reasons: string[] = [];
+    if (total === 0) {
+      reasons.push("No providers registered yet — add one in Manage Providers");
+    } else {
+      if (inactive > 0) reasons.push(`${inactive} provider(s) disabled`);
+      if (unconfigured > 0) {
+        const envVars = providers.filter((p) => p.isActive && !p.isConfigured).map((p) => `"${p.apiKeyEnv}"`).join(", ");
+        reasons.push(`${unconfigured} provider(s) missing env var: ${envVars} — add it/them in Vercel env vars, then redeploy`);
+      }
+      if (overLimit > 0) reasons.push(`${overLimit} provider(s) hit daily limit`);
+    }
+
+    throw new Error(
+      `No usable image providers (${total} registered, ${reasons.join("; ") || "unknown reason"}). ` +
+      `Open Manage Providers to add/enable a provider.`
+    );
   }
 
   let lastError = "";
