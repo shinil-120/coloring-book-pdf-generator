@@ -10,6 +10,7 @@ import {
 } from "@/lib/provider-store";
 import { generateWithFailover, getPricePerImage } from "@/lib/providers";
 import { categorySuffix } from "@/lib/coloring-data";
+import { buildPrompt } from "@/lib/prompt-builder";
 import {
   coloringPageExists,
   uploadColoringPage,
@@ -58,26 +59,6 @@ interface GenerateSummary {
   skipped: number;
   totalCostUsd: number;
   results: ItemResult[];
-}
-
-/**
- * Build the coloring-book prompt for a single item, matching the same style
- * the existing /api/generate-image endpoint uses for its "coloring" preset.
- *
- * Example:
- *   "Black and white line drawing coloring page for kids of a T-Rex dinosaur.
- *    Simple clean outline, no shading, no gray tones, thick black lines on
- *    white background, suitable for children coloring book, cartoon style,
- *    cute and friendly, single subject centered on page, full body visible"
- */
-function buildPrompt(itemName: string, categoryName: string): string {
-  const suffix = categorySuffix(categoryName);
-  return (
-    `Black and white line drawing coloring page for kids of a ${itemName} ${suffix}. ` +
-    `Simple clean outline, no shading, no gray tones, ` +
-    `thick black lines on white background, suitable for children coloring book, ` +
-    `cartoon style, cute and friendly, single subject centered on page, full body visible`
-  );
 }
 
 /**

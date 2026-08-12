@@ -27,6 +27,7 @@ import {
   FilePlus2,
   History,
   Trash2,
+  Upload,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -55,6 +56,8 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Progress } from "@/components/ui/progress";
 import { ManageCategories } from "@/components/manage-categories";
 import { ManageProviders } from "@/components/manage-providers";
+import { PromptsModal } from "@/components/prompts-modal";
+import { UploadImageModal } from "@/components/upload-image-modal";
 import {
   Tooltip,
   TooltipContent,
@@ -316,6 +319,8 @@ export function Generator() {
   const [manageCategoriesOpen, setManageCategoriesOpen] = useState(false);
   const [manageProvidersOpen, setManageProvidersOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+  const [promptsOpen, setPromptsOpen] = useState(false);
+  const [uploadOpen, setUploadOpen] = useState(false);
 
   // ─── Generation history (localStorage) ───
   // Each entry records a successful generation run so the user can see
@@ -1704,6 +1709,49 @@ export function Generator() {
             </motion.div>
           )}
 
+          {/* External image upload + View prompts — above Create PDF */}
+          {selectedSlug && selectedItemNames.size > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="rounded-3xl border border-violet-200 bg-gradient-to-br from-violet-50 via-purple-50 to-indigo-50 p-4 shadow-sm"
+            >
+              <div className="mb-2 flex items-center gap-2">
+                <Upload className="h-4 w-4 text-violet-600" />
+                <p className="text-xs font-bold text-violet-800">
+                  Free alternative: generate externally + upload
+                </p>
+              </div>
+              <p className="mb-3 text-[11px] text-violet-700">
+                Use free AI tools (ChatGPT, Bing) to generate B&W line art, then upload.
+                Uploaded images are included as additional pages — they don&apos;t replace
+                API-generated ones.
+              </p>
+              <div className="flex flex-wrap gap-2">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setPromptsOpen(true)}
+                  className="gap-1.5 rounded-xl border-violet-200 bg-white text-xs font-bold text-violet-700 hover:bg-violet-50"
+                >
+                  <FileText className="h-3.5 w-3.5" />
+                  View Prompts ({selectedItemNames.size})
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setUploadOpen(true)}
+                  className="gap-1.5 rounded-xl border-violet-200 bg-white text-xs font-bold text-violet-700 hover:bg-violet-50"
+                >
+                  <Upload className="h-3.5 w-3.5" />
+                  Upload External Image
+                </Button>
+              </div>
+            </motion.div>
+          )}
+
           {/* Assemble PDF */}
           {itemStates.length > 0 && (successCount > 0) && (
             <motion.div
@@ -1758,6 +1806,9 @@ export function Generator() {
                           <p className="text-[11px] text-stone-600">
                             {pdfMeta.name}
                             {pdfMeta.missing > 0 && ` · ${pdfMeta.missing} items had no image`}
+                          </p>
+                          <p className="mt-1 text-[10px] text-emerald-600">
+                            ✓ Also available in &quot;Coloring Book PDF&quot; and &quot;Edit PDF&quot; tabs
                           </p>
                         </div>
                         <a
@@ -2002,6 +2053,29 @@ export function Generator() {
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* View Prompts modal — shows all prompts for selected items */}
+      <PromptsModal
+        open={promptsOpen}
+        onOpenChange={setPromptsOpen}
+        categorySlug={selectedSlug}
+        itemNames={Array.from(selectedItemNames)}
+      />
+
+      {/* Upload External Image modal */}
+      <UploadImageModal
+        open={uploadOpen}
+        onOpenChange={setUploadOpen}
+        categorySlug={selectedSlug}
+        itemNames={Array.from(selectedItemNames)}
+        categoryItems={categoryItems}
+        onUploaded={() => {
+          // Refresh item states to show uploaded images
+          toast.success("Image uploaded!", {
+            description: "Click 'Create PDF' to include it in the book.",
+          });
+        }}
+      />
     </TooltipProvider>
   );
 }

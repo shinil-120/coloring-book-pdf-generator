@@ -248,25 +248,27 @@ export function PdfEditor() {
   }, []);
 
   // ─── Add blank pages (KDP bleed-through prevention) ───
+  // Inserts a blank page AFTER each content page (so pages don't bleed
+  // through when printed). Result: [page1, blank, page2, blank, page3, ...]
   const addBlankPages = useCallback(() => {
     if (blanksAdded) return;
     setPages((prev) => {
       const next: EditPage[] = [];
       prev.forEach((p) => {
-        next.push({
+        next.push(p);  // content page FIRST
+        next.push({    // blank AFTER
           id: `blank-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
           sourceIndex: -1,
           label: "(blank)",
           thumbnail: "",
           isBlank: true,
         });
-        next.push(p);
       });
       return next;
     });
     setBlanksAdded(true);
     toast.success("Blank pages added", {
-      description: "One blank inserted before each content page (KDP safe)",
+      description: "One blank inserted after each content page (KDP safe)",
     });
   }, [blanksAdded]);
 

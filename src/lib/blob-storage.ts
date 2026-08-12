@@ -168,3 +168,62 @@ export async function coloringPageExists(
   }
   return { exists: false, sizeBytes: 0, url: null };
 }
+
+// ─────────────────────────────────────────────────────────────────────────
+// External image uploads (from free AI tools like ChatGPT free, Bing, etc.)
+// ─────────────────────────────────────────────────────────────────────────
+// These are stored SEPARATELY from API-generated images so they don't
+// overwrite them. When assembling the PDF, BOTH API and external images
+// are included — the page count increases accordingly.
+
+/** Build the canonical blob path for an EXTERNAL coloring-page image. */
+export function externalColoringPageKey(slug: string, itemName: string): string {
+  return `coloring-books/${slug}/external/${slugify(itemName)}.png`;
+}
+
+/**
+ * Upload an externally-generated coloring-page image (from ChatGPT free,
+ * Bing, Craiyon, etc.). Stored at a SEPARATE path from API-generated images
+ * so it doesn't overwrite them — the PDF will include both.
+ */
+export async function uploadExternalColoringPage(
+  slug: string,
+  itemName: string,
+  buffer: Buffer
+): Promise<{ url: string; isLocal: boolean; key: string }> {
+  const key = externalColoringPageKey(slug, itemName);
+  const result = await uploadFile(key, buffer);
+  return { ...result, key };
+}
+
+/**
+ * Check if an external coloring-page image exists.
+ * Used by the assemble endpoint to include external images in the PDF.
+ */
+export async function externalColoringPageExists(
+  slug: string,
+  itemName: string
+): Promise<{ exists: boolean; sizeBytes: number; url: string | null }> {
+  const key = externalColoringPageKey(slug, itemName);
+
+  if (isBlobConfigured()) {
+    try {
+      const blob = await head(key);
+      return { exists: true, sizeBytes: blob.size ?? 0, url: blob.url };
+    } catch {
+      return { exists: false, sizeBytes: 0, url: null };
+    }
+  }
+
+  // Local fallback
+  const localPath = path.join(process.cwd(), "public", "downloads", key);
+  if (fs.existsSync(localPath)) {
+    try {
+      const stat = fs.statSync(localPath);
+      return { exists: true, sizeBytes: stat.size, url: `/downloads/${key}` };
+    } catch {
+      return { exists: false, sizeBytes: 0, url: null };
+    }
+  }
+  return { exists: false, sizeBytes: 0, url: null };
+}
