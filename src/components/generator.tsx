@@ -714,8 +714,35 @@ export function Generator() {
         });
 
         const data: GenerateResponse = await res.json();
+
+        // Handle non-JSON responses (Vercel HTML error pages, 504 timeouts, etc.)
+        const contentType = res.headers.get("content-type") || "";
+        if (!contentType.includes("application/json")) {
+          throw new Error(
+            `Server returned ${contentType || "non-JSON"} (HTTP ${res.status}). ` +
+            `This usually means a Vercel function timeout or crash. ` +
+            `Try fewer items, lower quality, or a faster provider.`
+          );
+        }
+
         if (!res.ok || !data.success) {
-          throw new Error(data?.error || `HTTP ${res.status}`);
+          // If we have a top-level error message, use it
+          if (data?.error) {
+            throw new Error(data.error);
+          }
+          // Otherwise, look at per-item errors in the summary
+          const failedItems = data?.summary?.results?.filter((r) => !r.success) ?? [];
+          if (failedItems.length > 0) {
+            const firstErr = failedItems[0]?.error ?? "Unknown error";
+            const allFailed = failedItems.length === (data?.summary?.totalItems ?? 0);
+            throw new Error(
+              allFailed
+                ? `All ${failedItems.length} item(s) failed. First error: ${firstErr.slice(0, 200)}`
+                : `${failedItems.length} of ${data?.summary?.totalItems ?? "?"} item(s) failed. First error: ${firstErr.slice(0, 200)}`
+            );
+          }
+          // Last resort: just show the HTTP status
+          throw new Error(`Generation failed (HTTP ${res.status})`);
         }
 
         const summary = data.summary;

@@ -329,8 +329,23 @@ export async function POST(req: NextRequest) {
     // Trim itemNames that weren't processed (so the client can resume)
     const remaining = itemNames.slice(namesToProcess.length);
 
+    // Build a top-level error message when items failed — so the client
+    // can display a helpful error instead of just "HTTP 200" (which happens
+    // when success=false but no top-level error field is present).
+    let topLevelError: string | undefined;
+    if (summary.failed > 0) {
+      const failedResults = results.filter((r) => !r.success);
+      const firstError = failedResults[0]?.error ?? "Unknown error";
+      if (summary.failed === summary.totalItems) {
+        topLevelError = `All ${summary.totalItems} item(s) failed. First error: ${firstError.slice(0, 200)}`;
+      } else {
+        topLevelError = `${summary.failed} of ${summary.totalItems} item(s) failed. First error: ${firstError.slice(0, 200)}`;
+      }
+    }
+
     return NextResponse.json({
       success: summary.failed === 0,
+      error: topLevelError,
       summary,
       remainingItems: remaining,
       batchDurationMs: Date.now() - startedAt,
