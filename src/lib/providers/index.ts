@@ -78,49 +78,90 @@ export class OpenAIProvider implements ImageProvider {
     const apiKey = process.env[this.apiKeyEnv];
     if (!apiKey) throw new Error(`OpenAI API key not set (env var: ${this.apiKeyEnv})`);
 
-    const model = this.model || "gpt-image-2";
+    // gpt-image-2 is the latest, but some older accounts only have access
+    // to gpt-image-1 or dall-e-3. If the primary model fails with 404
+    // (model not found), try the fallbacks.
+    const primaryModel = this.model || "gpt-image-2";
+    const fallbackModels = ["gpt-image-1", "dall-e-3"];
+    const modelsToTry = [primaryModel, ...fallbackModels.filter((m) => m !== primaryModel)];
 
-    const res = await fetch("https://api.openai.com/v1/images/generations", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model,
-        prompt: opts.prompt,
-        size: opts.size,
-        quality: opts.quality,
-        n: 1,
-      }),
-    });
+    // Normalize quality — gpt-image-* accepts "low"/"medium"/"high",
+    // dall-e-3 accepts "standard"/"hd". Map "standard" → "medium" for
+    // gpt-image-* models, and "low"/"medium"/"high" → "standard"/"hd"/"hd"
+    // for dall-e-3.
+    let lastError = "";
+    for (const model of modelsToTry) {
+      const isDalle = model.startsWith("dall-e");
+      const qualityForModel = isDalle
+        ? (opts.quality === "high" ? "hd" : "standard")
+        : (opts.quality === "standard" ? "medium" : opts.quality);
 
-    if (!res.ok) {
-      const errText = await res.text();
-      throw new Error(`OpenAI HTTP ${res.status}: ${errText.slice(0, 200)}`);
+      try {
+        const res = await fetch("https://api.openai.com/v1/images/generations", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify({
+            model,
+            prompt: opts.prompt,
+            size: opts.size,
+            quality: qualityForModel,
+            n: 1,
+          }),
+        });
+
+        if (!res.ok) {
+          const errText = await res.text();
+          // 404 = model not found, try next fallback
+          if (res.status === 404 || errText.includes("model_not_found") || errText.includes("does not exist")) {
+            lastError = `OpenAI model "${model}" not found (HTTP 404): ${errText.slice(0, 200)}`;
+            continue;
+          }
+          // For other errors (401, 429, 400), throw immediately — fallback won't help
+          throw new Error(`OpenAI HTTP ${res.status}: ${errText.slice(0, 300)}`);
+        }
+
+        const data = await res.json();
+        const first = data?.data?.[0];
+        let buffer: Buffer;
+
+        if (first?.b64_json) {
+          buffer = Buffer.from(first.b64_json, "base64");
+        } else if (first?.url) {
+          const imgRes = await fetch(first.url);
+          if (!imgRes.ok) throw new Error(`OpenAI image fetch: HTTP ${imgRes.status}`);
+          buffer = Buffer.from(await imgRes.arrayBuffer());
+        } else {
+          throw new Error("OpenAI returned no image data");
+        }
+
+        return {
+          buffer,
+          costUsd: getPricePerImage(model, opts.quality),
+          modelUsed: model,
+          providerType: "openai",
+          providerLabel: this.label,
+        };
+      } catch (err) {
+        // If this was a 404 (model not found), continue to next fallback
+        const msg = err instanceof Error ? err.message : String(err);
+        if (msg.includes("404") || msg.includes("model_not_found")) {
+          lastError = msg;
+          continue;
+        }
+        // For other errors, throw immediately
+        throw err;
+      }
     }
 
-    const data = await res.json();
-    const first = data?.data?.[0];
-    let buffer: Buffer;
-
-    if (first?.b64_json) {
-      buffer = Buffer.from(first.b64_json, "base64");
-    } else if (first?.url) {
-      const imgRes = await fetch(first.url);
-      if (!imgRes.ok) throw new Error(`OpenAI image fetch: HTTP ${imgRes.status}`);
-      buffer = Buffer.from(await imgRes.arrayBuffer());
-    } else {
-      throw new Error("OpenAI returned no image data");
-    }
-
-    return {
-      buffer,
-      costUsd: getPricePerImage(model, opts.quality),
-      modelUsed: model,
-      providerType: "openai",
-      providerLabel: this.label,
-    };
+    // All models failed with 404
+    throw new Error(
+      `OpenAI: no available image model. Tried ${modelsToTry.join(", ")}. ` +
+      `Last error: ${lastError.slice(0, 200)}. ` +
+      `Check your OpenAI account at https://platform.openai.com/account/limits to see which models you have access to.`
+    );
   }
 
   async test(): Promise<boolean> {
