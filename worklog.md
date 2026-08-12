@@ -1475,3 +1475,30 @@ Stage Summary:
 - Key new files:
   - `src/lib/seed-categories-data.ts` (reusable module)
   - `src/app/api/admin/seed/route.ts` (API endpoint)
+
+---
+Task ID: external-upload-prompts-sync
+Agent: Z.ai Code (user-requested features)
+Task: Add external image upload, prompts viewer, PDF sync to other tabs, fix blank page insertion order.
+
+Work Log:
+- Created shared prompt-builder module (src/lib/prompt-builder.ts) with buildPrompt() + FREE_AI_TOOLS list
+- Created /api/prompts endpoint — returns prompts for items, numbered format, free tools list
+- Created /api/upload-coloring-image endpoint — multipart form upload, PNG/JPG only, 10MB max
+- Added external image storage functions to blob-storage.ts (separate path: coloring-books/{slug}/external/)
+- Created PromptsModal component — numbered list with Copy All + Download .txt + free tool links
+- Created UploadImageModal component — drag&drop bulk upload, filename-to-item auto-matching, progress bar
+- Added "View Prompts" + "Upload External Image" buttons ABOVE "Create PDF" in generator
+- Updated assemble-category-pdf to include BOTH API + external images as separate pages
+- Updated assemble-category-pdf to upload PDF to Vercel Blob + create ColoringBook record
+  → PDF now appears in Coloring Book PDF tab + Edit PDF tab automatically
+- Fixed "all green" colorization bug — now uses getPalette() for per-item diverse colors
+- Fixed blank page insertion in Edit PDF — blanks now go AFTER each page (was: before)
+- Updated vercel.json with upload-coloring-image route
+
+Stage Summary:
+- **Status: ALL FEATURES BUILT & PUSHED**
+- 5 new files, 6 modified files
+- External images stored separately (don't overwrite API-generated ones)
+- PDF sync to ColoringBook table means users can rearrange pages + add blanks in Edit PDF tab
+- Blank pages now: [page1, blank, page2, blank, ...] instead of [blank, page1, blank, page2, ...]
