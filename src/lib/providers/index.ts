@@ -164,11 +164,16 @@ export class ZaiProvider implements ImageProvider {
       throw new Error(`Z.AI API key not set (env var: ${this.apiKeyEnv}). Add it to your Vercel env vars.`);
     }
 
-    // Call the Z.AI API directly. The Z.AI API requires a `model` parameter.
-    // Z.AI's image generation is built on top of their GLM multimodal models,
-    // so we use "glm-4.5" (their latest image-capable model) by default.
-    // The user can override this by setting a different model in the provider config.
-    const model = this.model && this.model !== "auto" ? this.model : "glm-4.5";
+    // Z.AI's image generation model is "cogview-4-250304" (CogView-4).
+    // This is different from the GLM chat models — CogView-4 is the dedicated
+    // text-to-image model. The user can override by setting a different model
+    // in the provider config.
+    //
+    // IMPORTANT: The chat.z.ai web interface has free quota for image generation,
+    // but the API requires prepaid credits. If you see "Insufficient balance",
+    // you need to add credits at https://z.ai/billing — even though chat.z.ai
+    // works for free.
+    const model = this.model && this.model !== "auto" ? this.model : "cogview-4-250304";
 
     const res = await fetch(`${ZAI_BASE_URL}/images/generations`, {
       method: "POST",
@@ -204,12 +209,14 @@ export class ZaiProvider implements ImageProvider {
 
       // Helpful hints for common errors
       let hint = "";
-      if (errMsg.includes("Insufficient balance") || errMsg.includes("1113")) {
-        hint = " — Your Z.AI account has no credits. Add credits at https://z.ai/billing";
-      } else if (errMsg.includes("Unknown Model") || errMsg.includes("1211")) {
-        hint = ` — Model "${model}" is not supported. Try a different model.`;
+      if (errMsg.includes("Insufficient balance") || errMsg.includes("1113") || errMsg.includes("余额不足")) {
+        hint = " — Your Z.AI API account has no credits. The chat.z.ai web interface is free, but the API requires prepaid credits. Add credits at https://z.ai/billing";
+      } else if (errMsg.includes("Unknown Model") || errMsg.includes("1211") || errMsg.includes("模型不存在")) {
+        hint = ` — Model "${model}" is not available on your Z.AI account. Try "cogview-4-250304" (default).`;
       } else if (errMsg.includes("401") || errMsg.includes("Unauthorized")) {
         hint = " — Your Z.AI API key is invalid. Re-check it at https://z.ai/dashboard/api-keys";
+      } else if (errMsg.includes("429") || errMsg.includes("rate limit")) {
+        hint = " — Rate limited. Wait 60 seconds and retry.";
       }
 
       throw new Error(`Z.AI API error${errCode}: ${errMsg}${hint}`);
