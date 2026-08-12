@@ -504,14 +504,69 @@ export function Generator() {
 
   const selectedCount = selectedItemNames.size;
 
+  // ─── Track which items have external (uploaded) images ───
+  // Keyed by item name. When an item has an external image, it's excluded
+  // from the cost estimate (since the external image is free).
+  const [externalImages, setExternalImages] = useState<Map<string, boolean>>(new Map());
+
+  // Refresh external image status when category changes
+  useEffect(() => {
+    if (!selectedSlug) {
+      setExternalImages(new Map());
+      return;
+    }
+    // Check each item for an external image (in background, non-blocking)
+    const checkExternal = async () => {
+      const newMap = new Map<string, boolean>();
+      // Use the items API to check which items have external images
+      // We do this in parallel for speed
+      await Promise.all(
+        categoryItems.map(async (item) => {
+          try {
+            const res = await fetch(
+              `/api/check-external-image?categorySlug=${encodeURIComponent(selectedSlug)}&itemName=${encodeURIComponent(item.name)}`,
+              { cache: "no-store" }
+            );
+            const data = await res.json();
+            if (data.success && data.exists) {
+              newMap.set(item.name, true);
+            }
+          } catch {
+            // non-fatal
+          }
+        })
+      );
+      setExternalImages(newMap);
+    };
+    checkExternal();
+  }, [selectedSlug, categoryItems]);
+
+  // Count items that need paid generation (have NO external image)
+  const paidItemCount = useMemo(() => {
+    let count = 0;
+    for (const name of selectedItemNames) {
+      if (!externalImages.get(name)) count++;
+    }
+    return count;
+  }, [selectedItemNames, externalImages]);
+
+  // Count items with external images (free)
+  const externalItemCount = useMemo(() => {
+    let count = 0;
+    for (const name of selectedItemNames) {
+      if (externalImages.get(name)) count++;
+    }
+    return count;
+  }, [selectedItemNames, externalImages]);
+
   // ─── Live cost estimate (client-side, updates instantly) ───
   // Computes a min/max range based on the selected quality's price range
-  // across all providers. This is an estimate — the actual cost depends on
-  // which provider serves each image (failover may mix providers).
+  // across all providers. Items with external images are EXCLUDED from
+  // the cost (since they're free — uploaded from external AI tools).
   const liveEstimate = useMemo(() => {
     const option = QUALITY_OPTIONS.find((q) => q.value === quality);
     if (!option || selectedCount === 0) {
-      return { min: 0, max: 0, perImageMin: 0, perImageMax: 0, free: false };
+      return { min: 0, max: 0, perImageMin: 0, perImageMax: 0, free: false, paidCount: 0, freeCount: 0 };
     }
     const perImageMin = option.minPrice;
     const perImageMax = option.maxPrice;
@@ -521,13 +576,15 @@ export function Generator() {
     );
     const effectiveMin = hasFreeProvider ? 0 : perImageMin;
     return {
-      min: effectiveMin * selectedCount,
-      max: perImageMax * selectedCount,
+      min: effectiveMin * paidItemCount,
+      max: perImageMax * paidItemCount,
       perImageMin: effectiveMin,
       perImageMax: perImageMax,
       free: hasFreeProvider,
+      paidCount: paidItemCount,
+      freeCount: externalItemCount,
     };
-  }, [quality, selectedCount, providers]);
+  }, [quality, selectedCount, providers, paidItemCount, externalItemCount]);
 
   // Clamp selection if user reduces pageCount below selected count
   useEffect(() => {
@@ -1222,11 +1279,12 @@ export function Generator() {
                       {categoryItems.map((item) => {
                         const checked = selectedItemNames.has(item.name);
                         const disabled = !checked && selectedItemNames.size >= maxSelectable;
+                        const hasExternal = externalImages.get(item.name);
                         return (
-                          <label
+                          <div
                             key={item.id}
                             className={cn(
-                              "flex cursor-pointer items-center gap-2 rounded-lg px-2 py-1.5 text-xs font-medium transition-colors",
+                              "flex items-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium transition-colors",
                               checked
                                 ? "bg-rose-50 text-rose-700"
                                 : "text-stone-700 hover:bg-stone-100",
@@ -1239,8 +1297,73 @@ export function Generator() {
                               onCheckedChange={() => toggleItem(item.name)}
                               className="data-[state=checked]:bg-rose-500 data-[state=checked]:border-rose-500"
                             />
-                            <span className="truncate">{item.name}</span>
-                          </label>
+                            <span className="min-w-0 flex-1 truncate">{item.name}</span>
+                            {hasExternal && (
+                              <Badge variant="secondary" className="shrink-0 bg-violet-100 px-1.5 py-0 text-[9px] font-bold text-violet-700">
+                                ✓ uploaded
+                              </Badge>
+                            )}
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                // Open file picker for this specific item
+                                const input = document.createElement("input");
+                                input.type = "file";
+                                input.accept = "image/png,image/jpeg,image/jpg";
+                                input.onchange = async () => {
+                                  const file = input.files?.[0];
+                                  if (!file) return;
+                                  // Validate
+                                  if (!["image/png", "image/jpeg", "image/jpg"].includes(file.type)) {
+                                    toast.error("Only PNG and JPG allowed");
+                                    return;
+                                  }
+                                  if (file.size > 10 * 1024 * 1024) {
+                                    toast.error("File too large (max 10MB)");
+                                    return;
+                                  }
+                                  // Upload
+                                  const formData = new FormData();
+                                  formData.append("categorySlug", selectedSlug);
+                                  formData.append("itemName", item.name);
+                                  formData.append("image", file);
+                                  try {
+                                    const res = await fetch("/api/upload-coloring-image", {
+                                      method: "POST",
+                                      body: formData,
+                                    });
+                                    const data = await res.json();
+                                    if (res.ok && data.success) {
+                                      toast.success(`Uploaded "${item.name}"`, {
+                                        description: `${(file.size / 1024).toFixed(0)} KB · free (no charge)`,
+                                      });
+                                      // Mark as having external image
+                                      setExternalImages((prev) => {
+                                        const next = new Map(prev);
+                                        next.set(item.name, true);
+                                        return next;
+                                      });
+                                    } else {
+                                      toast.error("Upload failed", {
+                                        description: data?.error || `HTTP ${res.status}`,
+                                      });
+                                    }
+                                  } catch (err) {
+                                    toast.error("Upload failed", {
+                                      description: err instanceof Error ? err.message : "Network error",
+                                    });
+                                  }
+                                };
+                                input.click();
+                              }}
+                              className="shrink-0 rounded-md p-1 text-stone-400 transition-colors hover:bg-violet-100 hover:text-violet-600"
+                              title="Upload external image for this item"
+                            >
+                              <Upload className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
                         );
                       })}
                     </div>
@@ -1359,6 +1482,11 @@ export function Generator() {
                     ? `${selectedCount} image${selectedCount === 1 ? "" : "s"} × ${quality} quality`
                     : "Select items to see cost estimate"}
                 </p>
+                {liveEstimate.freeCount > 0 && (
+                  <p className="mt-0.5 text-[10px] text-violet-600">
+                    {liveEstimate.freeCount} free (uploaded) · {liveEstimate.paidCount} paid
+                  </p>
+                )}
               </div>
               {selectedCount > 0 && (
                 <div className="shrink-0 text-right">
@@ -1376,6 +1504,11 @@ export function Generator() {
                   {liveEstimate.free && (
                     <p className="text-[10px] font-bold text-emerald-600">
                       ✓ Free provider available
+                    </p>
+                  )}
+                  {liveEstimate.freeCount > 0 && (
+                    <p className="text-[10px] font-bold text-violet-600">
+                      {liveEstimate.freeCount} uploaded (free)
                     </p>
                   )}
                 </div>
@@ -1709,7 +1842,7 @@ export function Generator() {
             </motion.div>
           )}
 
-          {/* External image upload + View prompts — above Create PDF */}
+          {/* View Prompts — above Create PDF (per-item upload is now in the item picker) */}
           {selectedSlug && selectedItemNames.size > 0 && (
             <motion.div
               initial={{ opacity: 0, y: 8 }}
@@ -1719,13 +1852,13 @@ export function Generator() {
               <div className="mb-2 flex items-center gap-2">
                 <Upload className="h-4 w-4 text-violet-600" />
                 <p className="text-xs font-bold text-violet-800">
-                  Free alternative: generate externally + upload
+                  Free alternative: generate externally + upload per-item
                 </p>
               </div>
               <p className="mb-3 text-[11px] text-violet-700">
-                Use free AI tools (ChatGPT, Bing) to generate B&W line art, then upload.
-                Uploaded images are included as additional pages — they don&apos;t replace
-                API-generated ones.
+                Use free AI tools (ChatGPT, Bing) to generate B&amp;W line art, then
+                click the upload icon (⬆) next to each item. Uploaded images are
+                <strong> free</strong> — excluded from the cost estimate.
               </p>
               <div className="flex flex-wrap gap-2">
                 <Button
@@ -1738,16 +1871,11 @@ export function Generator() {
                   <FileText className="h-3.5 w-3.5" />
                   View Prompts ({selectedItemNames.size})
                 </Button>
-                <Button
-                  type="button"
-                  size="sm"
-                  variant="outline"
-                  onClick={() => setUploadOpen(true)}
-                  className="gap-1.5 rounded-xl border-violet-200 bg-white text-xs font-bold text-violet-700 hover:bg-violet-50"
-                >
-                  <Upload className="h-3.5 w-3.5" />
-                  Upload External Image
-                </Button>
+                {liveEstimate.freeCount > 0 && (
+                  <Badge variant="secondary" className="self-center bg-violet-100 text-[10px] font-bold text-violet-700">
+                    {liveEstimate.freeCount} uploaded (free)
+                  </Badge>
+                )}
               </div>
             </motion.div>
           )}
