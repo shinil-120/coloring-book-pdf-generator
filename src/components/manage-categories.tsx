@@ -419,41 +419,93 @@ export function ManageCategories({ open, onOpenChange, onChanged }: Props) {
     [onChanged]
   );
 
-  // ─── Seed Database (lets users seed production Turso from any browser) ───
-  // Calls POST /api/admin/seed which runs the full 137-category seeder
-  // server-side. Essential for users deploying to Vercel from a phone
-  // (where running `bun run scripts/seed-categories.ts` locally isn't possible).
+  // ─── Seed Database (batched — loops until all 137 categories are seeded) ───
+  // The API seeds up to 20 categories per request (Vercel 60s timeout limit),
+  // so we loop until `needsMore === false`, updating the progress bar between
+  // batches. Each batch takes ~3-4 seconds; 137 categories = ~7 batches = ~25s total.
+  const [seedProgress, setSeedProgress] = useState<{ current: number; total: number } | null>(null);
+
   const handleSeed = useCallback(async () => {
     if (
       !confirm(
         "Seed the database with 137 built-in categories (5,429 items)?\n\n" +
-        "This is idempotent — existing categories won't be duplicated. " +
-        "Takes ~30 seconds on first run."
+        "This runs in batches of 20 — total time ~25 seconds. " +
+        "Idempotent: existing categories are skipped."
       )
     ) {
       return;
     }
     setSeeding(true);
     setSeedResult(null);
+    setSeedProgress({ current: 0, total: 137 });
+
+    let totalSeeded = 0;
+    let totalItems = 0;
+    let totalDuration = 0;
+    let lastErrors: string[] = [];
+    let batchNum = 0;
+    const maxBatches = 20; // safety limit (137/20 = 7 batches)
+
     try {
-      const res = await fetch("/api/admin/seed", { method: "POST" });
-      const data = await res.json();
-      if (!res.ok || !data.success) {
-        throw new Error(data?.error || `HTTP ${res.status}`);
+      while (batchNum < maxBatches) {
+        batchNum++;
+        const res = await fetch("/api/admin/seed", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ batchSize: 20 }),
+        });
+
+        // Handle non-JSON responses (Vercel HTML error pages)
+        const contentType = res.headers.get("content-type") || "";
+        if (!contentType.includes("application/json")) {
+          const text = await res.text();
+          throw new Error(
+            `Server returned ${contentType || "non-JSON"} (HTTP ${res.status}). ` +
+            `This usually means a Vercel timeout. ` +
+            `First 100 chars: ${text.slice(0, 100)}`
+          );
+        }
+
+        const data = await res.json();
+        if (!res.ok || !data.success) {
+          throw new Error(data?.error || `HTTP ${res.status}`);
+        }
+
+        totalSeeded = data.totalCategoriesInDB ?? totalSeeded;
+        totalItems = data.totalItemsInDB ?? totalItems;
+        totalDuration += data.durationMs ?? 0;
+        lastErrors = data.errors ?? [];
+
+        setSeedProgress({
+          current: data.totalCategoriesInDB ?? 0,
+          total: data.totalCategoriesExpected ?? 137,
+        });
+
+        if (!data.needsMore) {
+          break;
+        }
       }
+
       setSeedResult({
-        success: true,
-        message: data.message || "Seeding complete",
-        totalCategories: data.totalCategories,
-        totalItems: data.totalItems,
-        durationMs: data.durationMs,
+        success: lastErrors.length === 0,
+        message:
+          totalSeeded === 137
+            ? `✓ All 137 categories seeded! ${totalItems.toLocaleString()} items in ${(totalDuration / 1000).toFixed(1)}s`
+            : `Seeded ${totalSeeded}/137 categories${lastErrors.length > 0 ? ` (${lastErrors.length} errors)` : ""}`,
+        totalCategories: totalSeeded,
+        totalItems,
+        durationMs: totalDuration,
       });
-      toast.success(data.message || "Database seeded", {
-        description:
-          data.alreadySeeded
-            ? "All 137 categories were already present"
-            : `${data.totalCategories} categories · ${data.totalItems} items · ${(data.durationMs / 1000).toFixed(1)}s`,
-      });
+
+      toast.success(
+        totalSeeded === 137
+          ? "Database fully seeded! 🎉"
+          : `Seeded ${totalSeeded}/137 categories`,
+        {
+          description: `${totalItems.toLocaleString()} items · ${(totalDuration / 1000).toFixed(1)}s total · ${batchNum} batches`,
+        }
+      );
+
       onChanged?.();
       fetchCategories();
     } catch (err) {
@@ -462,6 +514,7 @@ export function ManageCategories({ open, onOpenChange, onChanged }: Props) {
       toast.error("Seeding failed", { description: msg });
     } finally {
       setSeeding(false);
+      setSeedProgress(null);
     }
   }, [onChanged, fetchCategories]);
 
@@ -497,6 +550,32 @@ export function ManageCategories({ open, onOpenChange, onChanged }: Props) {
               {seeding ? "Seeding…" : "Seed DB"}
             </Button>
           </div>
+
+          {/* Live progress bar while seeding (batched) */}
+          {seeding && seedProgress && (
+            <div className="mt-3 rounded-xl border border-emerald-200 bg-emerald-50 p-3">
+              <div className="mb-1.5 flex items-center justify-between text-[11px] font-bold text-emerald-800">
+                <span className="flex items-center gap-1.5">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  Seeding database…
+                </span>
+                <span className="tabular-nums">
+                  {seedProgress.current} / {seedProgress.total}
+                </span>
+              </div>
+              <div className="h-2 overflow-hidden rounded-full bg-emerald-100">
+                <div
+                  className="h-full bg-gradient-to-r from-emerald-500 to-emerald-600 transition-all duration-500"
+                  style={{
+                    width: `${Math.round((seedProgress.current / seedProgress.total) * 100)}%`,
+                  }}
+                />
+              </div>
+              <p className="mt-1 text-[10px] text-emerald-700">
+                {Math.round((seedProgress.current / seedProgress.total) * 100)}% complete · running in batches of 20
+              </p>
+            </div>
+          )}
 
           {/* Seed result banner */}
           {seedResult && (

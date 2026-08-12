@@ -337,26 +337,55 @@ export async function createItemsBulk(
   if (items.length === 0) return 0;
 
   const now = new Date().toISOString();
-  let inserted = 0;
 
-  // Insert one-by-one (libsql doesn't support multi-row INSERT in a single statement
-  // in all configurations; this is safer)
-  for (let i = 0; i < items.length; i++) {
-    const it = items[i];
-    const id = crypto.randomUUID();
-    const paletteJson = it.palette ? JSON.stringify(it.palette) : null;
-    try {
-      await turso.execute({
-        sql: `INSERT INTO items (id, categoryId, name, sortOrder, paletteJson, isDeleted, createdAt, updatedAt)
-              VALUES (?, ?, ?, ?, ?, 0, ?, ?)`,
-        args: [id, categoryId, it.name, i, paletteJson, now, now],
-      });
-      inserted++;
-    } catch (e) {
-      console.error(`Failed to insert item "${it.name}":`, e);
+  // Use turso.batch() — single network round-trip + atomic transaction.
+  // This is ~40x faster than individual execute() calls for 40 items,
+  // which is critical for the seeder (5,429 items total).
+  // The previous one-by-one approach caused Vercel function timeouts.
+  const statements = items.map((it, i) => ({
+    sql: `INSERT INTO items (id, categoryId, name, sortOrder, paletteJson, isDeleted, createdAt, updatedAt)
+          VALUES (?, ?, ?, ?, ?, 0, ?, ?)`,
+    args: [
+      crypto.randomUUID(),
+      categoryId,
+      it.name,
+      i,
+      it.palette ? JSON.stringify(it.palette) : null,
+      now,
+      now,
+    ],
+  }));
+
+  try {
+    await turso.batch(statements, "write");
+    return items.length;
+  } catch (e) {
+    console.error(`createItemsBulk failed for category ${categoryId}:`, e);
+    // Fallback: try one-by-one (slower but more resilient to partial failures)
+    let inserted = 0;
+    for (let i = 0; i < items.length; i++) {
+      const it = items[i];
+      try {
+        await turso.execute({
+          sql: `INSERT INTO items (id, categoryId, name, sortOrder, paletteJson, isDeleted, createdAt, updatedAt)
+                VALUES (?, ?, ?, ?, ?, 0, ?, ?)`,
+          args: [
+            crypto.randomUUID(),
+            categoryId,
+            it.name,
+            i,
+            it.palette ? JSON.stringify(it.palette) : null,
+            now,
+            now,
+          ],
+        });
+        inserted++;
+      } catch (itemErr) {
+        console.error(`Failed to insert item "${it.name}":`, itemErr);
+      }
     }
+    return inserted;
   }
-  return inserted;
 }
 
 /** Update an item's name or palette. */

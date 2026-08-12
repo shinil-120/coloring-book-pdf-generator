@@ -2541,4 +2541,116 @@ export async function runSeeder(): Promise<SeedResult> {
   };
 }
 
+export interface BatchedSeedResult {
+  success: boolean;
+  categoriesSeededThisBatch: number;
+  itemsSeededThisBatch: number;
+  skippedThisBatch: number;
+  failedThisBatch: number;
+  errors: string[];
+  totalCategoriesInDB: number;   // running count across all batches
+  totalItemsInDB: number;
+  totalCategoriesExpected: number;  // = CATEGORIES.length (137)
+  needsMore: boolean;            // true = call again to continue seeding
+  durationMs: number;
+}
+
+/**
+ * Run the seeder in BATCHES — seeds up to `batchSize` categories per call.
+ *
+ * This is essential for Vercel serverless functions which have a 60s timeout.
+ * Seeding all 137 categories × 40 items in one request would exceed the
+ * timeout. Instead, the client calls this endpoint repeatedly until
+ * `needsMore === false`.
+ *
+ * Each call:
+ *   1. ensureCategorySchema()
+ *   2. Find the next `batchSize` categories that don't exist yet
+ *   3. Insert them (using createItemsBulk with batch() for speed)
+ *   4. Return progress + needsMore flag
+ *
+ * Idempotent + resumable — safe to call multiple times, skips existing.
+ */
+export async function runSeederBatched(batchSize = 20): Promise<BatchedSeedResult> {
+  const startedAt = Date.now();
+  const errors: string[] = [];
+  let seededThisBatch = 0;
+  let itemsThisBatch = 0;
+  let skippedThisBatch = 0;
+  let failedThisBatch = 0;
+
+  if (!isTursoConfigured()) {
+    return {
+      success: false,
+      categoriesSeededThisBatch: 0,
+      itemsSeededThisBatch: 0,
+      skippedThisBatch: 0,
+      failedThisBatch: 0,
+      errors: ["Turso not configured — set TURSO_DATABASE_URL"],
+      totalCategoriesInDB: 0,
+      totalItemsInDB: 0,
+      totalCategoriesExpected: CATEGORIES.length,
+      needsMore: false,
+      durationMs: Date.now() - startedAt,
+    };
+  }
+
+  await ensureCategorySchema();
+
+  // Find categories that don't exist yet
+  const missing: SeedCategory[] = [];
+  for (const cat of CATEGORIES) {
+    const existing = await getCategory(cat.slug);
+    if (!existing) {
+      missing.push(cat);
+      if (missing.length >= batchSize) break;
+    }
+  }
+
+  // Seed the missing ones
+  for (const cat of missing) {
+    try {
+      const created = await createCategory({
+        name: cat.name,
+        slug: cat.slug,
+        emoji: cat.emoji,
+        themeColor: cat.themeColor,
+        description: cat.description,
+        isBuiltin: true,
+      });
+      const count = await createItemsBulk(
+        created.id,
+        cat.items.map((name) => ({ name }))
+      );
+      seededThisBatch++;
+      itemsThisBatch += count;
+    } catch (e) {
+      failedThisBatch++;
+      errors.push(
+        `${cat.slug} FAILED: ${e instanceof Error ? e.message : String(e)}`
+      );
+    }
+  }
+
+  // Count total categories + items now in the DB
+  const { listCategories } = await import("./category-store");
+  const allCategories = await listCategories();
+  const totalCategoriesInDB = allCategories.length;
+  const totalItemsInDB = allCategories.reduce((s, c) => s + c.itemCount, 0);
+
+  return {
+    success: failedThisBatch === 0,
+    categoriesSeededThisBatch: seededThisBatch,
+    itemsSeededThisBatch: itemsThisBatch,
+    skippedThisBatch,
+    failedThisBatch,
+    errors: errors.slice(0, 5),
+    totalCategoriesInDB,
+    totalItemsInDB,
+    totalCategoriesExpected: CATEGORIES.length,
+    needsMore: totalCategoriesInDB < CATEGORIES.length,
+    durationMs: Date.now() - startedAt,
+  };
+}
+
 export { CATEGORIES };
