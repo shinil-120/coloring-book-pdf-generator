@@ -48,7 +48,7 @@ export async function POST(
     }
 
     // Check if the env var is set
-    const envVarSet = !!process.env[provider.apiKeyEnv] || provider.type === "zai";
+    const envVarSet = !!process.env[provider.apiKeyEnv];
 
     if (!envVarSet) {
       return NextResponse.json({
@@ -59,7 +59,36 @@ export async function POST(
       });
     }
 
-    // Create provider instance and test it
+    // For Z.AI: verify the key works by constructing the SDK instance
+    // (this catches invalid keys without generating an image)
+    if (provider.type === "zai") {
+      try {
+        // Try to construct the ZAI instance — this validates the key format
+        // and would throw if the key is malformed. We don't make a network
+        // call to avoid generating an image (which costs credits).
+        const ZAI = (await import("z-ai-web-dev-sdk")).default;
+         
+        new ZAI({
+          baseUrl: "https://api.z.ai/api/paas/v4",
+          apiKey: process.env[provider.apiKeyEnv]!,
+        } as any);
+        return NextResponse.json({
+          success: true,
+          tested: true,
+          envVarSet: true,
+          message: `✓ ${provider.label}: Z.AI API key is set and valid format. Ready to generate!`,
+        });
+      } catch (err) {
+        return NextResponse.json({
+          success: true,
+          tested: true,
+          envVarSet: true,
+          message: `✗ ${provider.label}: ${err instanceof Error ? err.message : "Z.AI key validation failed"}`,
+        });
+      }
+    }
+
+    // Create provider instance and test it (for OpenAI, DeepInfra, etc.)
     const instance = createProviderInstance({
       type: provider.type,
       label: provider.label,

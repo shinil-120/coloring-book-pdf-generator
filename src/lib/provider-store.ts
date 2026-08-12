@@ -250,8 +250,10 @@ async function toProvider(row: ProviderRow): Promise<Provider> {
     }
   }
 
-  // Check if env var is set
-  const isConfigured = !!process.env[row.apiKeyEnv] || row.type === "zai"; // Z.AI may auto-auth in sandbox
+  // Check if env var is set. Z.AI no longer auto-authenticates on Vercel
+  // (the .z-ai-config file only exists in the Z.ai Code sandbox), so we
+  // require the env var to be set explicitly on production.
+  const isConfigured = !!process.env[row.apiKeyEnv];
 
   return {
     id: row.id,

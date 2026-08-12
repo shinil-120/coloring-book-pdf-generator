@@ -141,6 +141,26 @@ export class OpenAIProvider implements ImageProvider {
 // Z.AI provider (z-ai-web-dev-sdk) — single account
 // ─────────────────────────────────────────────────────────────────────────
 
+// The Z.AI SDK's ZAI.create() reads from a .z-ai-config file (not env vars).
+// In the Z.ai Code sandbox, that file exists automatically. On Vercel (or
+// any production environment), the file doesn't exist, so we construct the
+// ZAI instance directly with config from the env var.
+// This bypasses loadConfig() entirely — works everywhere.
+async function createZaiInstance(apiKeyEnv: string) {
+  const apiKey = process.env[apiKeyEnv];
+  if (!apiKey) {
+    throw new Error(`Z.AI API key not set (env var: ${apiKeyEnv}). Add it to your Vercel env vars.`);
+  }
+  const ZAI = (await import("z-ai-web-dev-sdk")).default;
+  // Construct directly with config — bypasses loadConfig() which requires
+  // a .z-ai-config file that doesn't exist on Vercel.
+   
+  return new ZAI({
+    baseUrl: "https://api.z.ai/api/paas/v4",
+    apiKey,
+  } as any);
+}
+
 export class ZaiProvider implements ImageProvider {
   type: ProviderType = "zai";
   constructor(
@@ -150,14 +170,11 @@ export class ZaiProvider implements ImageProvider {
   ) {}
 
   async generate(opts: GenerateOptions): Promise<GenerateResult> {
-    // The SDK auto-authenticates in sandbox. In production, it reads the env var.
-    // If a specific env var is configured (e.g. ZAI_API_KEY_2), set it before importing.
-    const ZAI = (await import("z-ai-web-dev-sdk")).default;
-    const zai = await ZAI.create();
+    const zai = await createZaiInstance(this.apiKeyEnv);
 
     const response = await zai.images.generations.create({
       prompt: opts.prompt,
-      size: opts.size,
+      size: opts.size as "1024x1024" | "768x1344" | "864x1152" | "1344x768" | "1152x864" | "1440x720" | "720x1440",
     });
 
     const first = response?.data?.[0];
