@@ -399,27 +399,44 @@ export function ManageProviders({ open, onOpenChange, onChanged }: Props) {
         const res = await fetch(`/api/providers/${provider.id}/test`, {
           method: "POST",
         });
+
+        // Handle non-JSON responses (Vercel 404/500 HTML error pages)
+        const contentType = res.headers.get("content-type") || "";
+        if (!contentType.includes("application/json")) {
+          throw new Error(
+            `Server returned ${contentType || "non-JSON"} (HTTP ${res.status}). ` +
+            `This usually means the API route is missing or timed out.`
+          );
+        }
+
         const data = await res.json();
-        if (data.success && data.tested && data.success === true) {
+
+        if (!res.ok || !data.success) {
+          throw new Error(data?.error || `HTTP ${res.status}`);
+        }
+
+        if (data.envVarSet === false) {
+          toast.warning(`${provider.label}: env var not set`, {
+            description: `Add "${provider.apiKeyEnv}" to Vercel env vars, then redeploy.`,
+          });
+        } else if (data.tested === true) {
           toast.success(`${provider.label}: API key is valid`, {
             description: data.message,
           });
-        } else if (data.success && data.tested === false) {
-          toast(`${provider.label}: test not implemented`, {
-            description: data.message,
-          });
-        } else if (data.envVarSet === false) {
-          toast.warning(`${provider.label}: env var not set`, {
-            description: `Add "${provider.apiKeyEnv}" to .env.local`,
+        } else if (data.tested === false) {
+          // "test not implemented" — env var is set but we can't verify without generating
+          toast.success(`${provider.label}: ready to use`, {
+            description: data.message || "Will verify on first image generation.",
           });
         } else {
-          toast.error(`${provider.label}: test failed`, {
-            description: data.message ?? "Unknown error",
+          toast.success(`${provider.label}: ready`, {
+            description: data.message ?? "Provider configured.",
           });
         }
       } catch (err) {
+        const msg = err instanceof Error ? err.message : "Unknown error";
         toast.error("Test request failed", {
-          description: err instanceof Error ? err.message : "Unknown error",
+          description: msg,
         });
       } finally {
         setTestingId(null);
