@@ -19,6 +19,18 @@
     "src/app/api/generate-cover/route.ts": {
       "maxDuration": 60,
       "memory": 1024
+    },
+    "src/app/api/generate/route.ts": {
+      "maxDuration": 60,
+      "memory": 1024
+    },
+    "src/app/api/admin/seed/route.ts": {
+      "maxDuration": 60,
+      "memory": 1024
+    },
+    "src/app/api/assemble-category-pdf/route.ts": {
+      "maxDuration": 60,
+      "memory": 1024
     }
   }
 }
