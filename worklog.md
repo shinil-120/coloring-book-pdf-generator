@@ -1388,3 +1388,42 @@ Stage Summary:
   - Generation stats dashboard (charts of spend over time)
   - Keyboard shortcut for opening history (Ctrl+H)
   - Recently generated items quick-access (across categories)
+
+---
+Task ID: permanent-db-fix
+Agent: Z.ai Code (user-requested fix)
+Task: Implement a permanent fix so the dev server auto-recreates .env.local + re-seeds the DB if they get cleaned up between sessions.
+
+Work Log:
+- User reported built-in categories missing in preview (3rd time this has happened)
+- Root cause: sandbox environment periodically cleans up `.env.local` + `db/categories.db` between sessions
+- Previous rounds (1, 2, 3) all had to manually restore these files
+- Implemented permanent fix: pre-dev hook that auto-checks + auto-seeds
+
+Files created/modified:
+- **NEW** `scripts/ensure-db.sh` — idempotent pre-dev hook:
+  1. Creates `.env.local` if missing (with default `TURSO_DATABASE_URL=file:./db/categories.db`)
+  2. Appends `TURSO_DATABASE_URL` if `.env.local` exists but lacks it
+  3. Creates `db/` directory if missing
+  4. Checks if DB file exists AND has categories (using sqlite3 CLI if available, file size fallback otherwise)
+  5. Re-seeds via `bun run scripts/seed-categories.ts` only when DB is missing or empty
+  6. Prints clear status messages with `[ensure-db]` prefix
+- **MODIFIED** `package.json`:
+  - `dev` script now runs `bash scripts/ensure-db.sh &&` before `next dev`
+  - Added `seed` script: `bun run scripts/seed-categories.ts`
+  - Added `ensure-db` script: `bash scripts/ensure-db.sh`
+
+Verification:
+- Test 1 (DB exists): script runs in 6ms, prints "DB ready (file size: 1753088 bytes)"
+- Test 2 (DB deleted): script recreates .env.local, re-seeds 137 categories × 5429 items in <1s
+- API confirmed: `/api/categories` returns 137 categories after auto-seed
+- Clean lint (0 errors, 0 warnings)
+- Dev server starts normally after the hook
+
+Stage Summary:
+- **Status: PERMANENT FIX IMPLEMENTED**
+- The recurring "No categories available" issue is now permanently resolved
+- `bun run dev` auto-restores the DB if it gets cleaned up
+- Normal startup is instant (~6ms) when DB exists
+- Re-seed only triggers when DB is missing or empty (~1 second)
+- User will never see "No categories available" again, even after sandbox cleanup
