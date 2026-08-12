@@ -13,6 +13,7 @@ import { categorySuffix } from "@/lib/coloring-data";
 import { buildPrompt } from "@/lib/prompt-builder";
 import {
   coloringPageExists,
+  externalColoringPageExists,
   uploadColoringPage,
 } from "@/lib/blob-storage";
 
@@ -43,6 +44,7 @@ interface ItemResult {
   itemName: string;
   success: boolean;
   skipped: boolean;
+  skippedReason?: "external" | "existing"; // why it was skipped
   providerLabel?: string;
   providerType?: string;
   costUsd: number;
@@ -156,15 +158,17 @@ export async function POST(req: NextRequest) {
     // ── Dry-run mode: estimate cost WITHOUT calling any provider ───────
     // Returns a per-item breakdown of estimated cost + skip flags.
     if (dryRun) {
-      // First, check which items already exist (so we can skip them in the
-      // estimate when resumeMode is on).
-      const existsChecks = await Promise.all(
-        itemNames.map((n) => coloringPageExists(categorySlug, n))
-      );
-      const willSkip = existsChecks.map((e) => e.exists && e.sizeBytes >= MIN_IMAGE_BYTES);
-      const toGenerateCount = resumeMode
-        ? willSkip.filter((s) => !s).length
-        : itemNames.length;
+      // First, check which items already exist (API + external) so we can
+      // skip them in the estimate.
+      const [apiChecks, extChecks] = await Promise.all([
+        Promise.all(itemNames.map((n) => coloringPageExists(categorySlug, n))),
+        Promise.all(itemNames.map((n) => externalColoringPageExists(categorySlug, n))),
+      ]);
+      const willSkipApi = apiChecks.map((e) => e.exists && e.sizeBytes >= MIN_IMAGE_BYTES);
+      const willSkipExt = extChecks.map((e) => e.exists && e.sizeBytes >= MIN_IMAGE_BYTES);
+      // An item is skipped if it has an API image (and resumeMode) OR an external image
+      const willSkip = willSkipExt.map((ext, i) => ext || (resumeMode && willSkipApi[i]));
+      const toGenerateCount = willSkip.filter((s) => !s).length;
 
       // Pick the cheapest configured provider for the estimate (if any).
       // If no providers are configured, still return success=true with $0 cost
@@ -182,11 +186,12 @@ export async function POST(req: NextRequest) {
       }
 
       const results: ItemResult[] = itemNames.map((n, i) => {
-        const skip = resumeMode && willSkip[i];
+        const skip = willSkip[i];
         return {
           itemName: n,
           success: true,
           skipped: skip,
+          skippedReason: willSkipExt[i] ? "external" : (willSkipApi[i] ? "existing" : undefined),
           costUsd: skip ? 0 : perImage,
         };
       });
@@ -195,7 +200,7 @@ export async function POST(req: NextRequest) {
         totalItems: itemNames.length,
         success: toGenerateCount,
         failed: 0,
-        skipped: resumeMode ? willSkip.filter(Boolean).length : 0,
+        skipped: willSkip.filter(Boolean).length,
         totalCostUsd: results.reduce((s, r) => s + r.costUsd, 0),
         results,
       };
@@ -233,7 +238,25 @@ export async function POST(req: NextRequest) {
     for (const itemName of namesToProcess) {
       const itemStart = Date.now();
       try {
-        // 1. Check if image already exists in blob (resumable batches).
+        // 1. Check if an EXTERNAL image was uploaded for this item (free!).
+        // If so, skip API generation entirely — the external image will be
+        // included by the PDF assembler. No cost!
+        const extExisting = await externalColoringPageExists(categorySlug, itemName);
+        if (extExisting.exists && extExisting.sizeBytes >= MIN_IMAGE_BYTES && extExisting.url) {
+          results.push({
+            itemName,
+            success: true,
+            skipped: true,
+            skippedReason: "external",
+            costUsd: 0,
+            blobUrl: extExisting.url,
+            sizeBytes: extExisting.sizeBytes,
+            durationMs: Date.now() - itemStart,
+          });
+          continue;
+        }
+
+        // 2. Check if API image already exists (resumable batches).
         // resumeMode (default true) → skip existing images so the client can
         // retry the whole batch without paying twice.
         // resumeMode === false → overwrite existing images (regenerate).
@@ -253,7 +276,7 @@ export async function POST(req: NextRequest) {
           }
         }
 
-        // 2. Build prompt
+        // 3. Build prompt
         const prompt = buildPrompt(itemName, category.name);
 
         // 3. Generate (with failover across providers)

@@ -505,52 +505,67 @@ export function Generator() {
   const selectedCount = selectedItemNames.size;
 
   // ─── Track which items have external (uploaded) images ───
-  // Keyed by item name. When an item has an external image, it's excluded
-  // from the cost estimate (since the external image is free).
   const [externalImages, setExternalImages] = useState<Map<string, boolean>>(new Map());
 
-  // Refresh external image status when category changes
+  // ─── Track which items have API-generated images (previously generated) ───
+  const [generatedImages, setGeneratedImages] = useState<Map<string, boolean>>(new Map());
+
+  // Refresh external + generated image status when category changes
   useEffect(() => {
     if (!selectedSlug) {
       setExternalImages(new Map());
+      setGeneratedImages(new Map());
       return;
     }
-    // Check each item for an external image (in background, non-blocking)
-    const checkExternal = async () => {
-      const newMap = new Map<string, boolean>();
-      // Use the items API to check which items have external images
-      // We do this in parallel for speed
+    const checkImages = async () => {
+      const newExt = new Map<string, boolean>();
+      const newGen = new Map<string, boolean>();
       await Promise.all(
         categoryItems.map(async (item) => {
           try {
-            const res = await fetch(
+            // Check external (uploaded) image
+            const extRes = await fetch(
               `/api/check-external-image?categorySlug=${encodeURIComponent(selectedSlug)}&itemName=${encodeURIComponent(item.name)}`,
               { cache: "no-store" }
             );
-            const data = await res.json();
-            if (data.success && data.exists) {
-              newMap.set(item.name, true);
+            const extData = await extRes.json();
+            if (extData.success && extData.exists) {
+              newExt.set(item.name, true);
+            }
+          } catch {
+            // non-fatal
+          }
+          try {
+            // Check API-generated image
+            const genRes = await fetch(
+              `/api/check-generated-image?categorySlug=${encodeURIComponent(selectedSlug)}&itemName=${encodeURIComponent(item.name)}`,
+              { cache: "no-store" }
+            );
+            const genData = await genRes.json();
+            if (genData.success && genData.exists) {
+              newGen.set(item.name, true);
             }
           } catch {
             // non-fatal
           }
         })
       );
-      setExternalImages(newMap);
+      setExternalImages(newExt);
+      setGeneratedImages(newGen);
     };
-    checkExternal();
+    checkImages();
   }, [selectedSlug, categoryItems]);
 
-  // Count items that need paid generation (have NO external image)
+  // Count items that need paid generation (have NO external image AND no API image)
   const paidItemCount = useMemo(() => {
     let count = 0;
     for (const name of selectedItemNames) {
-      if (!externalImages.get(name)) count++;
+      if (!externalImages.get(name) && !generatedImages.get(name)) count++;
     }
     return count;
-  }, [selectedItemNames, externalImages]);
+  }, [selectedItemNames, externalImages, generatedImages]);
 
-  // Count items with external images (free)
+  // Count items with external images (free, uploaded)
   const externalItemCount = useMemo(() => {
     let count = 0;
     for (const name of selectedItemNames) {
@@ -559,6 +574,15 @@ export function Generator() {
     return count;
   }, [selectedItemNames, externalImages]);
 
+  // Count items with already-generated API images (free, resumable)
+  const generatedItemCount = useMemo(() => {
+    let count = 0;
+    for (const name of selectedItemNames) {
+      if (generatedImages.get(name)) count++;
+    }
+    return count;
+  }, [selectedItemNames, generatedImages]);
+
   // ─── Live cost estimate (client-side, updates instantly) ───
   // Computes a min/max range based on the selected quality's price range
   // across all providers. Items with external images are EXCLUDED from
@@ -566,11 +590,10 @@ export function Generator() {
   const liveEstimate = useMemo(() => {
     const option = QUALITY_OPTIONS.find((q) => q.value === quality);
     if (!option || selectedCount === 0) {
-      return { min: 0, max: 0, perImageMin: 0, perImageMax: 0, free: false, paidCount: 0, freeCount: 0 };
+      return { min: 0, max: 0, perImageMin: 0, perImageMax: 0, free: false, paidCount: 0, freeCount: 0, genCount: 0 };
     }
     const perImageMin = option.minPrice;
     const perImageMax = option.maxPrice;
-    // If any configured provider is free (Z.AI or Cloudflare), the min could be $0
     const hasFreeProvider = providers.some(
       (p) => p.isActive && p.isConfigured && (p.type === "zai" || p.type === "cloudflare")
     );
@@ -583,8 +606,9 @@ export function Generator() {
       free: hasFreeProvider,
       paidCount: paidItemCount,
       freeCount: externalItemCount,
+      genCount: generatedItemCount,
     };
-  }, [quality, selectedCount, providers, paidItemCount, externalItemCount]);
+  }, [quality, selectedCount, providers, paidItemCount, externalItemCount, generatedItemCount]);
 
   // Clamp selection if user reduces pageCount below selected count
   useEffect(() => {
@@ -1280,6 +1304,7 @@ export function Generator() {
                         const checked = selectedItemNames.has(item.name);
                         const disabled = !checked && selectedItemNames.size >= maxSelectable;
                         const hasExternal = externalImages.get(item.name);
+                        const hasGenerated = generatedImages.get(item.name);
                         return (
                           <div
                             key={item.id}
@@ -1298,6 +1323,11 @@ export function Generator() {
                               className="data-[state=checked]:bg-rose-500 data-[state=checked]:border-rose-500"
                             />
                             <span className="min-w-0 flex-1 truncate">{item.name}</span>
+                            {hasGenerated && (
+                              <Badge variant="secondary" className="shrink-0 bg-emerald-100 px-1.5 py-0 text-[9px] font-bold text-emerald-700">
+                                ✓ generated
+                              </Badge>
+                            )}
                             {hasExternal && (
                               <Badge variant="secondary" className="shrink-0 bg-violet-100 px-1.5 py-0 text-[9px] font-bold text-violet-700">
                                 ✓ uploaded
@@ -1484,7 +1514,12 @@ export function Generator() {
                 </p>
                 {liveEstimate.freeCount > 0 && (
                   <p className="mt-0.5 text-[10px] text-violet-600">
-                    {liveEstimate.freeCount} free (uploaded) · {liveEstimate.paidCount} paid
+                    {liveEstimate.freeCount} uploaded (free) · {liveEstimate.genCount} generated (free) · {liveEstimate.paidCount} to generate
+                  </p>
+                )}
+                {liveEstimate.freeCount === 0 && liveEstimate.genCount > 0 && (
+                  <p className="mt-0.5 text-[10px] text-emerald-600">
+                    {liveEstimate.genCount} generated (free) · {liveEstimate.paidCount} to generate
                   </p>
                 )}
               </div>
@@ -1821,6 +1856,65 @@ export function Generator() {
               </motion.div>
             )}
           </AnimatePresence>
+
+          {/* Ready Images — shows existing images (generated + uploaded) for selected items */}
+          {selectedSlug && selectedItemNames.size > 0 && (externalItemCount > 0 || generatedItemCount > 0) && !isGenerating && (
+            <motion.div
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="rounded-3xl border border-stone-200 bg-white p-5 shadow-sm"
+            >
+              <div className="mb-3 flex items-center justify-between">
+                <h3 className="text-sm font-bold text-stone-700">
+                  Ready Images ({externalItemCount + generatedItemCount})
+                </h3>
+                <div className="flex gap-2">
+                  {generatedItemCount > 0 && (
+                    <Badge variant="secondary" className="bg-emerald-100 text-[10px] font-bold text-emerald-700">
+                      {generatedItemCount} generated
+                    </Badge>
+                  )}
+                  {externalItemCount > 0 && (
+                    <Badge variant="secondary" className="bg-violet-100 text-[10px] font-bold text-violet-700">
+                      {externalItemCount} uploaded
+                    </Badge>
+                  )}
+                </div>
+              </div>
+              <p className="mb-3 text-[11px] text-stone-500">
+                These images are already available — no charge to use them.
+                Click &quot;Create PDF&quot; to include them in the coloring book.
+              </p>
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                {Array.from(selectedItemNames).map((name) => {
+                  const isGen = generatedImages.get(name);
+                  const isExt = externalImages.get(name);
+                  if (!isGen && !isExt) return null;
+                  return (
+                    <div
+                      key={name}
+                      className="flex flex-col items-center gap-1 rounded-xl border border-stone-200 bg-stone-50/40 p-2"
+                    >
+                      <div className="flex h-20 w-full items-center justify-center rounded-lg bg-white">
+                        <ImageIcon className="h-6 w-6 text-stone-400" />
+                      </div>
+                      <p className="truncate text-[11px] font-bold text-stone-700">{name}</p>
+                      {isGen && (
+                        <Badge variant="secondary" className="bg-emerald-100 text-[9px] font-bold text-emerald-700">
+                          ✓ generated
+                        </Badge>
+                      )}
+                      {isExt && (
+                        <Badge variant="secondary" className="bg-violet-100 text-[9px] font-bold text-violet-700">
+                          ✓ uploaded
+                        </Badge>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </motion.div>
+          )}
 
           {/* Results gallery */}
           {allDone && itemStates.some((s) => s.blobUrl) && (
