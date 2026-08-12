@@ -66,4 +66,4 @@ server.log
 /.zscripts/
 
 # Prisma local DB
-/db/
+/db/upload/
