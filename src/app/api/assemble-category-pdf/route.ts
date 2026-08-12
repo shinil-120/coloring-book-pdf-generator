@@ -112,15 +112,28 @@ export async function POST(req: NextRequest) {
       try {
         const rawBw = await readFile(exists.url);
 
-        // Pick palette: per-item if defined, else theme palette, else getPalette fallback
+        // Pick palette with this priority:
+        // 1. Per-item palette (if explicitly set in DB — rare)
+        // 2. getPalette() from coloring-data.ts — looks up natural palettes
+        //    by item name (e.g. Ladybug = red+black, Bee = yellow+black,
+        //    Butterfly = orange+blue+yellow). This gives DIVERSE colors
+        //    per item instead of all-same-theme-color.
+        // 3. Category theme palette (fallback for unknown items)
         const item = itemsByName.get(itemName);
         let palette: Palette;
         if (item?.palette && item.palette.length > 0) {
+          // Per-item palette stored in DB (e.g. user customized it)
           palette = item.palette;
         } else {
-          // Try the themed palette first; if not present, fall back to getPalette()
-          const themePalette = getThemePalette(category.themeColor);
-          palette = themePalette.length > 0 ? themePalette : getPalette(itemName, category.name);
+          // Try natural palette lookup first (gives per-item diversity)
+          const naturalPalette = getPalette(itemName, category.name);
+          if (naturalPalette && naturalPalette.length > 0) {
+            palette = naturalPalette;
+          } else {
+            // Last resort: category theme palette
+            const themePalette = getThemePalette(category.themeColor);
+            palette = themePalette.length > 0 ? themePalette : getPalette(itemName, category.name);
+          }
         }
 
         // Build the colored reference thumbnail (86×86) using the full pipeline.
