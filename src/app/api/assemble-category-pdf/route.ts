@@ -253,7 +253,9 @@ export async function POST(req: NextRequest) {
       });
 
       // Colored reference thumbnail (top-left, KDP-compliant 0.4" margin)
-      if (page.colorPng) {
+      // ONLY render this for "color" PDF type. For "bw" type, skip entirely
+      // — no placeholder box, no colored image, just white space.
+      if (pdfType === "color" && page.colorPng) {
         try {
           const colorImg = await pdfDoc.embedPng(page.colorPng);
           pdfPage.drawImage(colorImg, {
@@ -265,8 +267,8 @@ export async function POST(req: NextRequest) {
         } catch (err) {
           console.error("[/api/assemble-category-pdf] embed color failed:", err);
         }
-      } else {
-        // Draw a placeholder rect
+      } else if (pdfType === "color" && !page.colorPng) {
+        // Draw a placeholder rect ONLY in color mode when color image is missing
         pdfPage.drawRectangle({
           x: REF_X,
           y: PAGE_HEIGHT - REF_Y - REF_SIZE,
@@ -277,6 +279,7 @@ export async function POST(req: NextRequest) {
           color: pdfRgb(0.95, 0.95, 0.95),
         });
       }
+      // For "bw" mode: no reference thumbnail, no placeholder — just white space
 
       // B&W coloring image (centered, y=132 from bottom)
       if (page.cleanedBw) {
