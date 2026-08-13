@@ -686,6 +686,24 @@ export function Generator() {
     });
   }, [categoryItems, externalImages, generatedImages, maxSelectable]);
 
+  // Select all items that DON'T have an image yet (need generation/upload)
+  const selectNotReady = useCallback(() => {
+    const notReady = categoryItems
+      .filter((i) => !externalImages.get(i.name) && !generatedImages.get(i.name))
+      .slice(0, maxSelectable)
+      .map((i) => i.name);
+    if (notReady.length === 0) {
+      toast.info("All items have images", {
+        description: "Every item already has an uploaded or generated image.",
+      });
+      return;
+    }
+    setSelectedItemNames(new Set(notReady));
+    toast.success(`Selected ${notReady.length} item${notReady.length === 1 ? "" : "s"} to generate`, {
+      description: "These need image generation or upload.",
+    });
+  }, [categoryItems, externalImages, generatedImages, maxSelectable]);
+
   // ─── KDP compliance ───
   const kdpCompliant = useMemo(() => {
     return pageCount >= KDP_MIN_PAGES && pageCount <= KDP_MAX_PAGES;
@@ -1337,6 +1355,18 @@ export function Generator() {
                     >
                       <Check className="h-3 w-3" />
                       Ready
+                    </Button>
+                    {/* Select all items WITHOUT images (need generation/upload) */}
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={selectNotReady}
+                      className="h-8 gap-1 rounded-lg border-amber-200 px-2.5 text-[11px] font-bold text-amber-700 hover:bg-amber-50"
+                      title="Select all items that don't have images yet"
+                    >
+                      <AlertTriangle className="h-3 w-3" />
+                      To Do
                     </Button>
                     {/* Bulk upload — opens drag&drop modal for multiple files */}
                     <Button
