@@ -28,6 +28,7 @@ import {
   History,
   Trash2,
   Upload,
+  Palette,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -58,6 +59,7 @@ import { ManageCategories } from "@/components/manage-categories";
 import { ManageProviders } from "@/components/manage-providers";
 import { PromptsModal } from "@/components/prompts-modal";
 import { UploadImageModal } from "@/components/upload-image-modal";
+import { KdpContentModal } from "@/components/kdp-content-modal";
 import {
   Tooltip,
   TooltipContent,
@@ -290,9 +292,9 @@ export function Generator() {
   const [recentSlugs, setRecentSlugs] = useState<string[]>([]);
 
   // ─── Generator state ───
-  const [pageCount, setPageCount] = useState<number>(30);
   const [quality, setQuality] = useState<string>("medium");
   const [resumeMode, setResumeMode] = useState(true);
+  const [pdfType, setPdfType] = useState<"color" | "bw">("color");
 
   // ─── Budget + providers ───
   const [budget, setBudget] = useState<BudgetResponse | null>(null);
@@ -321,6 +323,7 @@ export function Generator() {
   const [historyOpen, setHistoryOpen] = useState(false);
   const [promptsOpen, setPromptsOpen] = useState(false);
   const [uploadOpen, setUploadOpen] = useState(false);
+  const [kdpOpen, setKdpOpen] = useState(false);
 
   // ─── Generation history (localStorage) ───
   // Each entry records a successful generation run so the user can see
@@ -500,7 +503,8 @@ export function Generator() {
     [categories, selectedSlug]
   );
 
-  const maxSelectable = useMemo(() => Math.min(pageCount, categoryItems.length), [pageCount, categoryItems.length]);
+  // No page count limit — user selects items directly via checkboxes
+  const maxSelectable = categoryItems.length;
 
   const selectedCount = selectedItemNames.size;
 
@@ -704,29 +708,32 @@ export function Generator() {
     });
   }, [categoryItems, externalImages, generatedImages, maxSelectable]);
 
-  // ─── KDP compliance ───
+  // ─── KDP compliance (based on selected item count) ───
   const kdpCompliant = useMemo(() => {
-    return pageCount >= KDP_MIN_PAGES && pageCount <= KDP_MAX_PAGES;
-  }, [pageCount]);
+    return selectedCount >= KDP_MIN_PAGES && selectedCount <= KDP_MAX_PAGES;
+  }, [selectedCount]);
 
   const kdpHint = useMemo(() => {
-    if (pageCount < KDP_MIN_PAGES) {
+    if (selectedCount === 0) {
+      return { ok: false, text: "Select items to begin" };
+    }
+    if (selectedCount < KDP_MIN_PAGES) {
       return {
         ok: false,
-        text: `⚠️ Below KDP minimum (${KDP_MIN_PAGES} pages) — Amazon will reject`,
+        text: `⚠️ ${KDP_MIN_PAGES - selectedCount} more needed for KDP minimum (${KDP_MIN_PAGES} pages)`,
       };
     }
-    if (pageCount > KDP_MAX_PAGES) {
+    if (selectedCount > KDP_MAX_PAGES) {
       return {
         ok: false,
-        text: `⚠️ Above KDP maximum (${KDP_MAX_PAGES} pages)`,
+        text: `⚠️ Exceeds KDP max (${KDP_MAX_PAGES} pages) — split into volumes`,
       };
     }
     return {
       ok: true,
-      text: `✓ KDP-valid (${KDP_MIN_PAGES}-${KDP_MAX_PAGES} pages)`,
+      text: `✓ KDP-valid (${selectedCount} pages)`,
     };
-  }, [pageCount]);
+  }, [selectedCount]);
 
   // ─── Dry run (estimate) ───
   const handleDryRun = useCallback(async () => {
@@ -982,6 +989,7 @@ export function Generator() {
         body: JSON.stringify({
           categorySlug: selectedSlug,
           itemNames: successItems,
+          pdfType,
         }),
       });
 
@@ -1485,55 +1493,68 @@ export function Generator() {
             </div>
           )}
 
-          {/* Page count slider */}
-          <div className="rounded-3xl border border-stone-200 bg-white p-5 shadow-sm">
+          {/* PDF type selector + KDP status */}
+          <div className="rounded-3xl border border-stone-200 bg-white p-4 shadow-sm sm:p-5">
             <div className="mb-3 flex items-center justify-between">
-              <Label className="text-sm font-bold text-stone-700">Page count</Label>
-              <Badge
-                variant="secondary"
-                className={cn(
-                  "text-sm font-extrabold tabular-nums",
-                  kdpCompliant
-                    ? "bg-emerald-50 text-emerald-700"
-                    : "bg-amber-50 text-amber-700"
-                )}
-              >
-                {pageCount}
-              </Badge>
-            </div>
-            <Slider
-              value={[pageCount]}
-              min={1}
-              max={100}
-              step={1}
-              onValueChange={(v) => setPageCount(v[0] ?? 30)}
-              className="h-6"
-            />
-            <div className="mt-2 flex flex-wrap gap-1.5">
-              {QUICK_PAGE_OPTIONS.map((n) => (
-                <button
-                  key={n}
-                  type="button"
-                  onClick={() => setPageCount(n)}
+              <Label className="text-sm font-bold text-stone-700">PDF Type</Label>
+              {selectedCount > 0 && (
+                <Badge
+                  variant="secondary"
                   className={cn(
-                    "rounded-lg border px-2.5 py-1 text-xs font-bold transition-all",
-                    pageCount === n
-                      ? "border-transparent bg-gradient-to-r from-rose-500 to-orange-500 text-white shadow-sm"
-                      : "border-stone-200 bg-white text-stone-600 hover:bg-stone-50"
+                    "text-xs font-extrabold tabular-nums",
+                    kdpCompliant
+                      ? "bg-emerald-50 text-emerald-700"
+                      : "bg-amber-50 text-amber-700"
                   )}
                 >
-                  {n}
-                </button>
-              ))}
-            </div>
-            <p
-              className={cn(
-                "mt-3 text-[11px] font-semibold",
-                kdpHint.ok ? "text-emerald-600" : "text-amber-600"
+                  {selectedCount} pages
+                </Badge>
               )}
-            >
-              {kdpHint.text}
-            </p>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => setPdfType("color")}
+                className={cn(
+                  "flex flex-col items-center gap-1 rounded-xl border p-3 transition-all",
+                  pdfType === "color"
+                    ? "border-transparent bg-gradient-to-br from-rose-500 to-orange-500 text-white shadow-md"
+                    : "border-stone-200 bg-white text-stone-600 hover:bg-stone-50"
+                )}
+              >
+                <Palette className="h-5 w-5" />
+                <span className="text-xs font-bold">Coloring Book</span>
+                <span className={cn("text-[10px]", pdfType === "color" ? "text-rose-100" : "text-stone-400")}>
+                  Colored reference + B&W
+                </span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setPdfType("bw")}
+                className={cn(
+                  "flex flex-col items-center gap-1 rounded-xl border p-3 transition-all",
+                  pdfType === "bw"
+                    ? "border-transparent bg-gradient-to-br from-stone-800 to-stone-700 text-white shadow-md"
+                    : "border-stone-200 bg-white text-stone-600 hover:bg-stone-50"
+                )}
+              >
+                <FileText className="h-5 w-5" />
+                <span className="text-xs font-bold">B&W Only</span>
+                <span className={cn("text-[10px]", pdfType === "bw" ? "text-stone-300" : "text-stone-400")}>
+                  No color, cheaper print
+                </span>
+              </button>
+            </div>
+            {selectedCount > 0 && (
+              <p
+                className={cn(
+                  "mt-3 text-[11px] font-semibold",
+                  kdpHint.ok ? "text-emerald-600" : "text-amber-600"
+                )}
+              >
+                {kdpHint.text}
+              </p>
+            )}
           </div>
 
           {/* Quality selector */}
@@ -2047,6 +2068,16 @@ export function Generator() {
                   <FileText className="h-3.5 w-3.5" />
                   View Prompts ({selectedItemNames.size})
                 </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setKdpOpen(true)}
+                  className="gap-1.5 rounded-xl border-emerald-200 bg-white text-xs font-bold text-emerald-700 hover:bg-emerald-50"
+                >
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Generate KDP Content
+                </Button>
                 {liveEstimate.freeCount > 0 && (
                   <Badge variant="secondary" className="self-center bg-violet-100 text-[10px] font-bold text-violet-700">
                     {liveEstimate.freeCount} uploaded (free)
@@ -2374,9 +2405,18 @@ export function Generator() {
         itemNames={Array.from(selectedItemNames)}
         categoryItems={categoryItems}
         onUploaded={() => {
-          // Refresh the "✓ uploaded" badges for all items
           refreshImageStatus();
         }}
+      />
+
+      {/* KDP Content Generator modal */}
+      <KdpContentModal
+        open={kdpOpen}
+        onOpenChange={setKdpOpen}
+        categoryName={selectedCategory?.name ?? ""}
+        itemCount={selectedItemNames.size}
+        pdfType={pdfType}
+        items={Array.from(selectedItemNames)}
       />
     </TooltipProvider>
   );

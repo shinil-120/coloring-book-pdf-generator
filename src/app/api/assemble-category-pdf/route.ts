@@ -35,6 +35,7 @@ interface AssembleBody {
   categorySlug?: string;
   itemNames?: string[];
   pageOrder?: number[]; // optional ordering — defaults to itemNames order
+  pdfType?: "color" | "bw"; // "color" = colored reference + B&W, "bw" = B&W only (no color)
 }
 
 interface ItemPage {
@@ -70,6 +71,7 @@ export async function POST(req: NextRequest) {
     const body = (await req.json()) as AssembleBody;
     const categorySlug = (body.categorySlug ?? "").trim();
     const itemNames = Array.isArray(body.itemNames) ? body.itemNames : [];
+    const pdfType: "color" | "bw" = body.pdfType === "bw" ? "bw" : "color";
 
     if (!categorySlug) {
       return NextResponse.json(
@@ -169,12 +171,17 @@ export async function POST(req: NextRequest) {
         // Clean B&W ONCE at dynamic resolution — reuse for PDF embed
         const cleanedBw = await cleanBwImageBuffer(rawBw, { resolution: bwResolution });
 
-        // Colorize at lower resolution (only used for 86pt thumbnail)
-        const colorFull = await colorizeImageBuffer(cleanedBw, palette, { resolution: colorResolution });
-        const colorThumb = await sharp(colorFull)
-          .resize(384, 384, { fit: "contain", background: { r: 255, g: 255, b: 255 }, kernel: "lanczos3" })
-          .png({ quality: 85, compressionLevel: 6 })
-          .toBuffer();
+        // Only colorize if pdfType is "color". For "bw" mode, skip colorization
+        // entirely — saves ~4s per image and produces a pure B&W PDF (cheaper
+        // to print on Amazon KDP since no color ink is needed).
+        let colorThumb: Buffer | null = null;
+        if (pdfType === "color") {
+          const colorFull = await colorizeImageBuffer(cleanedBw, palette, { resolution: colorResolution });
+          colorThumb = await sharp(colorFull)
+            .resize(384, 384, { fit: "contain", background: { r: 255, g: 255, b: 255 }, kernel: "lanczos3" })
+            .png({ quality: 85, compressionLevel: 6 })
+            .toBuffer();
+        }
 
         return { itemName: task.label, rawBw, cleanedBw, colorPng: colorThumb };
       } catch (err) {
