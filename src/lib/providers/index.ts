@@ -78,49 +78,90 @@ export class OpenAIProvider implements ImageProvider {
     const apiKey = process.env[this.apiKeyEnv];
     if (!apiKey) throw new Error(`OpenAI API key not set (env var: ${this.apiKeyEnv})`);
 
-    const model = this.model || "gpt-image-2";
+    // gpt-image-2 is the latest, but some older accounts only have access
+    // to gpt-image-1 or dall-e-3. If the primary model fails with 404
+    // (model not found), try the fallbacks.
+    const primaryModel = this.model || "gpt-image-2";
+    const fallbackModels = ["gpt-image-1", "dall-e-3"];
+    const modelsToTry = [primaryModel, ...fallbackModels.filter((m) => m !== primaryModel)];
 
-    const res = await fetch("https://api.openai.com/v1/images/generations", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": `Bearer ${apiKey}`,
-      },
-      body: JSON.stringify({
-        model,
-        prompt: opts.prompt,
-        size: opts.size,
-        quality: opts.quality,
-        n: 1,
-      }),
-    });
+    // Normalize quality — gpt-image-* accepts "low"/"medium"/"high",
+    // dall-e-3 accepts "standard"/"hd". Map "standard" → "medium" for
+    // gpt-image-* models, and "low"/"medium"/"high" → "standard"/"hd"/"hd"
+    // for dall-e-3.
+    let lastError = "";
+    for (const model of modelsToTry) {
+      const isDalle = model.startsWith("dall-e");
+      const qualityForModel = isDalle
+        ? (opts.quality === "high" ? "hd" : "standard")
+        : (opts.quality === "standard" ? "medium" : opts.quality);
 
-    if (!res.ok) {
-      const errText = await res.text();
-      throw new Error(`OpenAI HTTP ${res.status}: ${errText.slice(0, 200)}`);
+      try {
+        const res = await fetch("https://api.openai.com/v1/images/generations", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify({
+            model,
+            prompt: opts.prompt,
+            size: opts.size,
+            quality: qualityForModel,
+            n: 1,
+          }),
+        });
+
+        if (!res.ok) {
+          const errText = await res.text();
+          // 404 = model not found, try next fallback
+          if (res.status === 404 || errText.includes("model_not_found") || errText.includes("does not exist")) {
+            lastError = `OpenAI model "${model}" not found (HTTP 404): ${errText.slice(0, 200)}`;
+            continue;
+          }
+          // For other errors (401, 429, 400), throw immediately — fallback won't help
+          throw new Error(`OpenAI HTTP ${res.status}: ${errText.slice(0, 300)}`);
+        }
+
+        const data = await res.json();
+        const first = data?.data?.[0];
+        let buffer: Buffer;
+
+        if (first?.b64_json) {
+          buffer = Buffer.from(first.b64_json, "base64");
+        } else if (first?.url) {
+          const imgRes = await fetch(first.url);
+          if (!imgRes.ok) throw new Error(`OpenAI image fetch: HTTP ${imgRes.status}`);
+          buffer = Buffer.from(await imgRes.arrayBuffer());
+        } else {
+          throw new Error("OpenAI returned no image data");
+        }
+
+        return {
+          buffer,
+          costUsd: getPricePerImage(model, opts.quality),
+          modelUsed: model,
+          providerType: "openai",
+          providerLabel: this.label,
+        };
+      } catch (err) {
+        // If this was a 404 (model not found), continue to next fallback
+        const msg = err instanceof Error ? err.message : String(err);
+        if (msg.includes("404") || msg.includes("model_not_found")) {
+          lastError = msg;
+          continue;
+        }
+        // For other errors, throw immediately
+        throw err;
+      }
     }
 
-    const data = await res.json();
-    const first = data?.data?.[0];
-    let buffer: Buffer;
-
-    if (first?.b64_json) {
-      buffer = Buffer.from(first.b64_json, "base64");
-    } else if (first?.url) {
-      const imgRes = await fetch(first.url);
-      if (!imgRes.ok) throw new Error(`OpenAI image fetch: HTTP ${imgRes.status}`);
-      buffer = Buffer.from(await imgRes.arrayBuffer());
-    } else {
-      throw new Error("OpenAI returned no image data");
-    }
-
-    return {
-      buffer,
-      costUsd: getPricePerImage(model, opts.quality),
-      modelUsed: model,
-      providerType: "openai",
-      providerLabel: this.label,
-    };
+    // All models failed with 404
+    throw new Error(
+      `OpenAI: no available image model. Tried ${modelsToTry.join(", ")}. ` +
+      `Last error: ${lastError.slice(0, 200)}. ` +
+      `Check your OpenAI account at https://platform.openai.com/account/limits to see which models you have access to.`
+    );
   }
 
   async test(): Promise<boolean> {
@@ -138,8 +179,17 @@ export class OpenAIProvider implements ImageProvider {
 }
 
 // ─────────────────────────────────────────────────────────────────────────
-// Z.AI provider (z-ai-web-dev-sdk) — single account
+// Z.AI provider — calls the Z.AI API directly (bypasses z-ai-web-dev-sdk)
 // ─────────────────────────────────────────────────────────────────────────
+//
+// Why bypass the SDK?
+// The SDK's createImageGeneration() does `result.data.map(...)` which crashes
+// with "Cannot read properties of undefined (reading 'map')" when the API
+// returns a non-standard response (e.g. error format, async job, etc.).
+// Calling the API directly gives us full control over error handling and
+// supports all response formats (sync base64, sync URL, async polling).
+
+const ZAI_BASE_URL = "https://api.z.ai/api/paas/v4";
 
 export class ZaiProvider implements ImageProvider {
   type: ProviderType = "zai";
@@ -150,35 +200,122 @@ export class ZaiProvider implements ImageProvider {
   ) {}
 
   async generate(opts: GenerateOptions): Promise<GenerateResult> {
-    // The SDK auto-authenticates in sandbox. In production, it reads the env var.
-    // If a specific env var is configured (e.g. ZAI_API_KEY_2), set it before importing.
-    const ZAI = (await import("z-ai-web-dev-sdk")).default;
-    const zai = await ZAI.create();
+    const apiKey = process.env[this.apiKeyEnv];
+    if (!apiKey) {
+      throw new Error(`Z.AI API key not set (env var: ${this.apiKeyEnv}). Add it to your Vercel env vars.`);
+    }
 
-    const response = await zai.images.generations.create({
-      prompt: opts.prompt,
-      size: opts.size,
+    // Z.AI's image generation model is "cogview-4-250304" (CogView-4).
+    // This is different from the GLM chat models — CogView-4 is the dedicated
+    // text-to-image model. The user can override by setting a different model
+    // in the provider config.
+    //
+    // IMPORTANT: The chat.z.ai web interface has free quota for image generation,
+    // but the API requires prepaid credits. If you see "Insufficient balance",
+    // you need to add credits at https://z.ai/billing — even though chat.z.ai
+    // works for free.
+    const model = this.model && this.model !== "auto" ? this.model : "cogview-4-250304";
+
+    const res = await fetch(`${ZAI_BASE_URL}/images/generations`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${apiKey}`,
+        "X-Z-AI-From": "Z",
+      },
+      body: JSON.stringify({
+        model,
+        prompt: opts.prompt,
+        size: opts.size,
+      }),
     });
 
-    const first = response?.data?.[0];
-    const b64 = first?.base64 ?? (first as { b64_json?: string })?.b64_json;
-    const url = (first as { url?: string })?.url;
+    if (!res.ok) {
+      const errText = await res.text().catch(() => "");
+      throw new Error(`Z.AI HTTP ${res.status}: ${errText.slice(0, 300)}`);
+    }
 
-    let buffer: Buffer;
-    if (b64) {
-      buffer = Buffer.from(b64, "base64");
-    } else if (url) {
-      const imgRes = await fetch(url);
+    const data = await res.json().catch(() => null);
+    if (!data) {
+      throw new Error("Z.AI returned a non-JSON response");
+    }
+
+    // Check for Z.AI error response (even on HTTP 200, Z.AI can return errors
+    // in the body with code 1113 = insufficient balance, 1211 = unknown model, etc.)
+    if (data.error) {
+      const errMsg = typeof data.error === "string"
+        ? data.error
+        : data.error.message || JSON.stringify(data.error);
+      const errCode = data.error.code ? ` [code ${data.error.code}]` : "";
+
+      // Helpful hints for common errors
+      let hint = "";
+      if (errMsg.includes("Insufficient balance") || errMsg.includes("1113") || errMsg.includes("余额不足")) {
+        hint = " — Your Z.AI API account has no credits. The chat.z.ai web interface is free, but the API requires prepaid credits. Add credits at https://z.ai/billing";
+      } else if (errMsg.includes("Unknown Model") || errMsg.includes("1211") || errMsg.includes("模型不存在")) {
+        hint = ` — Model "${model}" is not available on your Z.AI account. Try "cogview-4-250304" (default).`;
+      } else if (errMsg.includes("401") || errMsg.includes("Unauthorized")) {
+        hint = " — Your Z.AI API key is invalid. Re-check it at https://z.ai/dashboard/api-keys";
+      } else if (errMsg.includes("429") || errMsg.includes("rate limit")) {
+        hint = " — Rate limited. Wait 60 seconds and retry.";
+      }
+
+      throw new Error(`Z.AI API error${errCode}: ${errMsg}${hint}`);
+    }
+
+    // Extract image — handle multiple response formats:
+    // 1. { data: [{ b64_json: "..." }] }      — OpenAI-style, base64 inline
+    // 2. { data: [{ url: "https://..." }] }   — OpenAI-style, URL
+    // 3. { data: [{ base64: "..." }] }        — Z.AI SDK-style (after post-processing)
+    // 4. { images: [{ url: "..." }] }         — fal.ai-style
+    // 5. { image_url: "..." }                  — single image
+    // 6. { base64: "..." }                     — single base64
+
+    let imageBuffer: Buffer | null = null;
+
+    // Try format 1/2/3: data array
+    if (Array.isArray(data.data) && data.data.length > 0) {
+      const first = data.data[0];
+      const b64 = first?.base64 ?? first?.b64_json;
+      const url = first?.url;
+      if (b64) {
+        imageBuffer = Buffer.from(b64, "base64");
+      } else if (url) {
+        const imgRes = await fetch(url);
+        if (!imgRes.ok) throw new Error(`Z.AI image fetch: HTTP ${imgRes.status}`);
+        imageBuffer = Buffer.from(await imgRes.arrayBuffer());
+      }
+    }
+    // Try format 4: images array
+    else if (Array.isArray(data.images) && data.images.length > 0) {
+      const url = data.images[0]?.url;
+      if (url) {
+        const imgRes = await fetch(url);
+        if (!imgRes.ok) throw new Error(`Z.AI image fetch: HTTP ${imgRes.status}`);
+        imageBuffer = Buffer.from(await imgRes.arrayBuffer());
+      }
+    }
+    // Try format 5: single image_url
+    else if (typeof data.image_url === "string") {
+      const imgRes = await fetch(data.image_url);
       if (!imgRes.ok) throw new Error(`Z.AI image fetch: HTTP ${imgRes.status}`);
-      buffer = Buffer.from(await imgRes.arrayBuffer());
-    } else {
-      throw new Error("Z.AI returned no image data");
+      imageBuffer = Buffer.from(await imgRes.arrayBuffer());
+    }
+    // Try format 6: base64 directly
+    else if (typeof data.base64 === "string") {
+      imageBuffer = Buffer.from(data.base64, "base64");
+    }
+
+    if (!imageBuffer || imageBuffer.length === 0) {
+      // Unknown response format — log it for debugging
+      const preview = JSON.stringify(data).slice(0, 500);
+      throw new Error(`Z.AI returned unexpected response format: ${preview}`);
     }
 
     return {
-      buffer,
-      costUsd: 0,
-      modelUsed: this.model || "auto",
+      buffer: imageBuffer,
+      costUsd: 0, // Z.AI pricing depends on account credits
+      modelUsed: model,
       providerType: "zai",
       providerLabel: this.label,
     };
@@ -523,7 +660,28 @@ export async function generateWithFailover(
   );
 
   if (usable.length === 0) {
-    throw new Error("No usable image providers — add an API key in Manage Providers");
+    // Build a helpful diagnostic message explaining WHY no providers are usable
+    const total = providers.length;
+    const inactive = providers.filter((p) => !p.isActive).length;
+    const unconfigured = providers.filter((p) => p.isActive && !p.isConfigured).length;
+    const overLimit = providers.filter((p) => p.isActive && p.isConfigured && p.dailyLimit !== null && p.usedToday >= p.dailyLimit).length;
+
+    const reasons: string[] = [];
+    if (total === 0) {
+      reasons.push("No providers registered yet — add one in Manage Providers");
+    } else {
+      if (inactive > 0) reasons.push(`${inactive} provider(s) disabled`);
+      if (unconfigured > 0) {
+        const envVars = providers.filter((p) => p.isActive && !p.isConfigured).map((p) => `"${p.apiKeyEnv}"`).join(", ");
+        reasons.push(`${unconfigured} provider(s) missing env var: ${envVars} — add it/them in Vercel env vars, then redeploy`);
+      }
+      if (overLimit > 0) reasons.push(`${overLimit} provider(s) hit daily limit`);
+    }
+
+    throw new Error(
+      `No usable image providers (${total} registered, ${reasons.join("; ") || "unknown reason"}). ` +
+      `Open Manage Providers to add/enable a provider.`
+    );
   }
 
   let lastError = "";

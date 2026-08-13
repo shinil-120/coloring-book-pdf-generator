@@ -15,8 +15,9 @@ import {
   PAGE_NUM_X,
   PAGE_NUM_Y,
 } from "@/lib/coloring-data";
-import { coloringPageExists, readFile } from "@/lib/blob-storage";
+import { coloringPageExists, externalColoringPageExists, readFile, uploadPdf, isBlobConfigured } from "@/lib/blob-storage";
 import { cleanBwImageBuffer, colorizeImageBuffer } from "@/lib/image-pipeline";
+import { upsertBook } from "@/lib/turso";
 import sharp from "sharp";
 
 export const runtime = "nodejs";
@@ -79,10 +80,8 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // Optional page reordering
-    const order = Array.isArray(body.pageOrder) && body.pageOrder.length === itemNames.length
-      ? body.pageOrder
-      : itemNames.map((_, i) => i);
+    // pageOrder is resolved AFTER pages are built (see below) — pages.length
+    // may be > itemNames.length if external uploads exist.
 
     const category = await getCategory(categorySlug);
     if (!category) {
@@ -97,50 +96,81 @@ export async function POST(req: NextRequest) {
     const itemsByName = new Map(allItems.map((it) => [it.name, it]));
 
     // ── Build pages: fetch raw B&W, clean, colorize for the reference thumbnail ─
+    // For each item, check BOTH:
+    //   1. API-generated B&W (at coloring-books/{slug}/bw/{item}.png)
+    //   2. Externally uploaded B&W (at coloring-books/{slug}/external/{item}.png)
+    // If BOTH exist, BOTH are included as separate pages (page count increases).
     const pages: ItemPage[] = [];
     let missingCount = 0;
 
     for (const itemName of itemNames) {
-      const exists = await coloringPageExists(categorySlug, itemName);
-      if (!exists.exists || exists.sizeBytes < 5 * 1024 || !exists.url) {
-        // Image not generated yet — skip with a warning.
-        missingCount++;
-        pages.push({ itemName, rawBw: null, colorPng: null });
-        continue;
+      // Helper: process a single B&W image (from API or external) into a page
+      const processImage = async (url: string, label: string) => {
+        try {
+          const rawBw = await readFile(url);
+
+          // Pick palette with this priority:
+          // 1. Per-item palette (if explicitly set in DB — rare)
+          // 2. getPalette() from coloring-data.ts — natural per-item colors
+          // 3. Category theme palette (fallback)
+          const item = itemsByName.get(itemName);
+          let palette: Palette;
+          if (item?.palette && item.palette.length > 0) {
+            palette = item.palette;
+          } else {
+            const naturalPalette = getPalette(itemName, category.name);
+            if (naturalPalette && naturalPalette.length > 0) {
+              palette = naturalPalette;
+            } else {
+              const themePalette = getThemePalette(category.themeColor);
+              palette = themePalette.length > 0 ? themePalette : getPalette(itemName, category.name);
+            }
+          }
+
+          const cleanedBw = await cleanBwImageBuffer(rawBw);
+          const colorFull = await colorizeImageBuffer(cleanedBw, palette);
+          // Use 2× resolution for the colored reference thumbnail (172×172)
+          // with lanczos3 kernel for high-quality downscaling from 2048→172.
+          const colorThumb = await sharp(colorFull)
+            .resize(REF_SIZE * 2, REF_SIZE * 2, { fit: "cover", kernel: "lanczos3" })
+            .png({ quality: 100, compressionLevel: 0 })
+            .toBuffer();
+
+          pages.push({ itemName: label, rawBw, colorPng: colorThumb });
+        } catch (err) {
+          console.error(`[/api/assemble-category-pdf] item "${label}" failed:`, err);
+          missingCount++;
+          pages.push({ itemName: label, rawBw: null, colorPng: null });
+        }
+      };
+
+      // 1. Check API-generated image
+      const apiExists = await coloringPageExists(categorySlug, itemName);
+      if (apiExists.exists && apiExists.sizeBytes >= 5 * 1024 && apiExists.url) {
+        await processImage(apiExists.url, itemName);
       }
 
-      try {
-        const rawBw = await readFile(exists.url);
+      // 2. Check externally uploaded image (additional — doesn't replace API)
+      const extExists = await externalColoringPageExists(categorySlug, itemName);
+      if (extExists.exists && extExists.sizeBytes >= 5 * 1024 && extExists.url) {
+        // Label external images with "(2)" suffix so the user can distinguish
+        await processImage(extExists.url, `${itemName} (2)`);
+      }
 
-        // Pick palette: per-item if defined, else theme palette, else getPalette fallback
-        const item = itemsByName.get(itemName);
-        let palette: Palette;
-        if (item?.palette && item.palette.length > 0) {
-          palette = item.palette;
-        } else {
-          // Try the themed palette first; if not present, fall back to getPalette()
-          const themePalette = getThemePalette(category.themeColor);
-          palette = themePalette.length > 0 ? themePalette : getPalette(itemName, category.name);
-        }
-
-        // Build the colored reference thumbnail (REF_SIZE×REF_SIZE) using the full pipeline.
-        // Use lanczos3 for high-quality downscaling from 2048→86.
-        const cleanedBw = await cleanBwImageBuffer(rawBw);
-        const colorFull = await colorizeImageBuffer(cleanedBw, palette);
-        const colorThumb = await sharp(colorFull)
-          .resize(REF_SIZE * 2, REF_SIZE * 2, { fit: "cover", kernel: "lanczos3" })
-          .png({ quality: 100, compressionLevel: 0 })
-          .toBuffer();
-
-        pages.push({ itemName, rawBw, colorPng: colorThumb });
-      } catch (err) {
-        console.error(`[/api/assemble-category-pdf] item "${itemName}" failed:`, err);
+      // If neither API nor external exists, mark as missing
+      if (!apiExists.exists && !extExists.exists) {
         missingCount++;
         pages.push({ itemName, rawBw: null, colorPng: null });
       }
     }
 
     // ── Build the PDF ──────────────────────────────────────────────────
+    // Resolve page order NOW that we know the actual page count (which may
+    // be > itemNames.length if external uploads exist).
+    const order = Array.isArray(body.pageOrder) && body.pageOrder.length === pages.length
+      ? body.pageOrder
+      : pages.map((_, i) => i);
+
     const pdfDoc = await PDFDocument.create();
     const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
     const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica);
@@ -255,15 +285,56 @@ export async function POST(req: NextRequest) {
     const outBytes = await pdfDoc.save({
       useObjectStreams: false,
     });
-    const dataUri = `data:application/pdf;base64,${Buffer.from(outBytes).toString("base64")}`;
+    const pdfBuffer = Buffer.from(outBytes);
+
+    // ── Save the PDF to Vercel Blob + create a ColoringBook record ────
+    // This makes the PDF appear in the "Coloring Book PDF" tab (where the
+    // user can download it) and the "Edit PDF" tab (where they can
+    // rearrange pages, add blank pages, etc.).
+    let pdfUrl: string;
+    let sizeBytes: number = pdfBuffer.length;
+
+    if (isBlobConfigured()) {
+      // Upload to Vercel Blob — returns a persistent CDN URL
+      const upload = await uploadPdf(category.slug, pdfBuffer);
+      pdfUrl = upload.url;
+    } else {
+      // Local dev fallback — return a data URI (no Blob upload)
+      pdfUrl = `data:application/pdf;base64,${pdfBuffer.toString("base64")}`;
+    }
+
+    // Create/update the ColoringBook record so the PDF appears in other tabs
+    const bookName = `${category.name} Coloring Book`;
+    const itemLabels = pages
+      .filter((p) => p.rawBw)
+      .map((p) => p.itemName);
+
+    try {
+      await upsertBook({
+        slug: category.slug,
+        name: bookName,
+        category: category.name,
+        description: `${pages.filter(p => p.rawBw).length} pages — auto-generated via Generator`,
+        pages: pageNum,
+        sizeBytes,
+        pdfUrl,
+        items: itemLabels,
+      });
+    } catch (bookErr) {
+      // Non-fatal — the PDF is still returned to the user even if the
+      // ColoringBook record fails (e.g. table doesn't exist yet).
+      console.error("[/api/assemble-category-pdf] upsertBook failed:", bookErr);
+    }
 
     return NextResponse.json({
       success: true,
-      pdf: dataUri,
+      pdf: pdfUrl,  // Blob URL (production) or data URI (local dev)
       pages: pageNum,
       requestedItems: itemNames.length,
       missingItems: missingCount,
       category: { slug: category.slug, name: category.name },
+      bookName,
+      syncedToLibrary: isBlobConfigured(), // true = also visible in Coloring Book PDF + Edit PDF tabs
       asOf: new Date().toISOString(),
     });
   } catch (err) {
