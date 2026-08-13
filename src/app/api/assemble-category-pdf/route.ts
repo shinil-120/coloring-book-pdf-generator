@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { PDFDocument, StandardFonts, rgb as pdfRgb } from "pdf-lib";
+import { PDFDocument, rgb as pdfRgb } from "pdf-lib";
 import { getCategory, listItems, getThemePalette } from "@/lib/category-store";
 import { getPalette, type Palette } from "@/lib/coloring-data";
 import {
@@ -19,6 +19,8 @@ import { coloringPageExists, externalColoringPageExists, readFile, uploadPdf, is
 import { cleanBwImageBuffer, colorizeImageBuffer } from "@/lib/image-pipeline";
 import { upsertBook } from "@/lib/turso";
 import sharp from "sharp";
+import fs from "fs";
+import path from "path";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -198,8 +200,29 @@ export async function POST(req: NextRequest) {
       : pages.map((_, i) => i);
 
     const pdfDoc = await PDFDocument.create();
-    const helveticaBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
-    const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica);
+
+    // ── Embed REAL TTF fonts (not StandardFonts) for KDP compliance ────
+    // KDP requires ALL fonts to be embedded as font programs. pdf-lib's
+    // StandardFonts (Helvetica) are "base 14" fonts which some KDP checkers
+    // don't recognize as properly embedded. Using real TTF files ensures
+    // the fonts are fully embedded.
+    //
+    // LiberationSans is metric-compatible with Arial/Helvetica, open-source,
+    // and available in the pdfjs-dist package.
+    const fontBoldPath = path.join(process.cwd(), "node_modules/pdfjs-dist/standard_fonts/LiberationSans-Bold.ttf");
+    const fontRegPath = path.join(process.cwd(), "node_modules/pdfjs-dist/standard_fonts/LiberationSans-Regular.ttf");
+    const fontBoldBytes = fs.readFileSync(fontBoldPath);
+    const fontRegBytes = fs.readFileSync(fontRegPath);
+    const helveticaBold = await pdfDoc.embedFont(fontBoldBytes, { subset: true });
+    const helvetica = await pdfDoc.embedFont(fontRegBytes, { subset: true });
+
+    // Set PDF metadata (helps KDP identify the document)
+    pdfDoc.setTitle(`${category.name} Coloring Book`);
+    pdfDoc.setAuthor("Coloring Book Studio");
+    pdfDoc.setSubject("Amazon KDP Coloring Book");
+    pdfDoc.setKeywords(["coloring book", "kids", category.name]);
+    pdfDoc.setProducer("Coloring Book PDF Generator");
+    pdfDoc.setCreator("Coloring Book Studio");
 
     let pageNum = 0;
     for (const idx of order) {

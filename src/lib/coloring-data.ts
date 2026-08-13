@@ -1001,9 +1001,9 @@ export const REF_Y = KDP_MARGIN;     // 29 (0.4" from top — KDP compliant)
 export const BW_SIZE = 380;          // B&W coloring 380×380
 export const BW_X = (PAGE_WIDTH - BW_SIZE) / 2;  // 116
 export const BW_Y = 132;             // below reference
-export const TITLE_Y = 527;          // below the B&W image
+export const TITLE_Y = 550;          // below the B&W image (was 527 — overlapped by 9pt)
 export const PAGE_NUM_X = 546;       // right-aligned
-export const PAGE_NUM_Y = 740;       // bottom-right
+export const PAGE_NUM_Y = 750;       // bottom-right (was 740 — moved down for KDP margin)
 
 // Blank page size (used by assemble-pdf when -1 appears in pageOrder)
 export const BLANK_PAGE_WIDTH = 612;
