@@ -510,51 +510,52 @@ export function Generator() {
   // ─── Track which items have API-generated images (previously generated) ───
   const [generatedImages, setGeneratedImages] = useState<Map<string, boolean>>(new Map());
 
-  // Refresh external + generated image status when category changes
-  useEffect(() => {
+  // Refresh external + generated image status for ALL items in the current category.
+  // Called on category change AND after bulk uploads complete.
+  const refreshImageStatus = useCallback(async () => {
     if (!selectedSlug) {
       setExternalImages(new Map());
       setGeneratedImages(new Map());
       return;
     }
-    const checkImages = async () => {
-      const newExt = new Map<string, boolean>();
-      const newGen = new Map<string, boolean>();
-      await Promise.all(
-        categoryItems.map(async (item) => {
-          try {
-            // Check external (uploaded) image
-            const extRes = await fetch(
-              `/api/check-external-image?categorySlug=${encodeURIComponent(selectedSlug)}&itemName=${encodeURIComponent(item.name)}`,
-              { cache: "no-store" }
-            );
-            const extData = await extRes.json();
-            if (extData.success && extData.exists) {
-              newExt.set(item.name, true);
-            }
-          } catch {
-            // non-fatal
+    const newExt = new Map<string, boolean>();
+    const newGen = new Map<string, boolean>();
+    await Promise.all(
+      categoryItems.map(async (item) => {
+        try {
+          const extRes = await fetch(
+            `/api/check-external-image?categorySlug=${encodeURIComponent(selectedSlug)}&itemName=${encodeURIComponent(item.name)}`,
+            { cache: "no-store" }
+          );
+          const extData = await extRes.json();
+          if (extData.success && extData.exists) {
+            newExt.set(item.name, true);
           }
-          try {
-            // Check API-generated image
-            const genRes = await fetch(
-              `/api/check-generated-image?categorySlug=${encodeURIComponent(selectedSlug)}&itemName=${encodeURIComponent(item.name)}`,
-              { cache: "no-store" }
-            );
-            const genData = await genRes.json();
-            if (genData.success && genData.exists) {
-              newGen.set(item.name, true);
-            }
-          } catch {
-            // non-fatal
+        } catch {
+          // non-fatal
+        }
+        try {
+          const genRes = await fetch(
+            `/api/check-generated-image?categorySlug=${encodeURIComponent(selectedSlug)}&itemName=${encodeURIComponent(item.name)}`,
+            { cache: "no-store" }
+          );
+          const genData = await genRes.json();
+          if (genData.success && genData.exists) {
+            newGen.set(item.name, true);
           }
-        })
-      );
-      setExternalImages(newExt);
-      setGeneratedImages(newGen);
-    };
-    checkImages();
+        } catch {
+          // non-fatal
+        }
+      })
+    );
+    setExternalImages(newExt);
+    setGeneratedImages(newGen);
   }, [selectedSlug, categoryItems]);
+
+  // Refresh image status when category changes
+  useEffect(() => {
+    refreshImageStatus();
+  }, [refreshImageStatus]);
 
   // Count items that need paid generation (have NO external image AND no API image)
   const paidItemCount = useMemo(() => {
@@ -1305,6 +1306,18 @@ export function Generator() {
                       className="h-8 rounded-lg border-stone-200 px-2.5 text-[11px] font-bold text-stone-600 hover:bg-stone-50"
                     >
                       Random {Math.min(10, maxSelectable)}
+                    </Button>
+                    {/* Bulk upload — opens drag&drop modal for multiple files */}
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={() => setUploadOpen(true)}
+                      className="h-8 gap-1 rounded-lg border-violet-200 px-2.5 text-[11px] font-bold text-violet-700 hover:bg-violet-50"
+                      title="Upload multiple images at once (filenames auto-matched to items)"
+                    >
+                      <Upload className="h-3 w-3" />
+                      Bulk Upload
                     </Button>
                   </div>
 
@@ -2303,10 +2316,8 @@ export function Generator() {
         itemNames={Array.from(selectedItemNames)}
         categoryItems={categoryItems}
         onUploaded={() => {
-          // Refresh item states to show uploaded images
-          toast.success("Image uploaded!", {
-            description: "Click 'Create PDF' to include it in the book.",
-          });
+          // Refresh the "✓ uploaded" badges for all items
+          refreshImageStatus();
         }}
       />
     </TooltipProvider>
