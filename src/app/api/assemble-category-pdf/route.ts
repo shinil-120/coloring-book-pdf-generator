@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { PDFDocument, rgb as pdfRgb } from "pdf-lib";
+import fontkit from "@pdf-lib/fontkit";
 import { getCategory, listItems, getThemePalette } from "@/lib/category-store";
 import { getPalette, type Palette } from "@/lib/coloring-data";
 import {
@@ -200,6 +201,10 @@ export async function POST(req: NextRequest) {
       : pages.map((_, i) => i);
 
     const pdfDoc = await PDFDocument.create();
+
+    // Register fontkit — REQUIRED for embedding custom TTF fonts.
+    // Without this, pdf-lib throws: "no fontkit instance was found"
+    pdfDoc.registerFontkit(fontkit);
 
     // ── Embed REAL TTF fonts (not StandardFonts) for KDP compliance ────
     // KDP requires ALL fonts to be embedded as font programs. pdf-lib's
