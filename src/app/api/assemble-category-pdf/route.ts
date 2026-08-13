@@ -129,11 +129,13 @@ export async function POST(req: NextRequest) {
 
           const cleanedBw = await cleanBwImageBuffer(rawBw);
           const colorFull = await colorizeImageBuffer(cleanedBw, palette);
-          // Use 2× resolution for the colored reference thumbnail (172×172)
-          // with lanczos3 kernel for high-quality downscaling from 2048→172.
+          // Colored reference thumbnail is only displayed at 86pt (1.2 inches).
+          // At 300 DPI, that's 360px — so 512px is plenty. No need for 2048px
+          // here (which would cause Vercel timeouts). The B&W printable image
+          // is the one that needs high resolution (handled separately below).
           const colorThumb = await sharp(colorFull)
-            .resize(REF_SIZE * 2, REF_SIZE * 2, { fit: "cover", kernel: "lanczos3" })
-            .png({ quality: 100, compressionLevel: 0 })
+            .resize(512, 512, { fit: "cover", kernel: "lanczos3" })
+            .png({ quality: 90, compressionLevel: 6 })
             .toBuffer();
 
           pages.push({ itemName: label, rawBw, colorPng: colorThumb });
@@ -220,8 +222,10 @@ export async function POST(req: NextRequest) {
       // B&W coloring image (centered, y=132 from bottom)
       if (page.rawBw) {
         try {
-          // Re-clean the B&W image at full resolution (2048×2048) for the printable page.
-          // No compression — preserves line art crispness for print.
+          // Clean the B&W image at 1600×1600 (300 DPI at 5.28" page size).
+          // We use 1600 instead of 2048 to avoid Vercel's 60s timeout —
+          // 1600px is still 300 DPI which is print-quality, and processes
+          // ~40% faster than 2048px.
           const bwPng = await cleanBwImageBuffer(page.rawBw);
           const bwImg = await pdfDoc.embedPng(bwPng);
           pdfPage.drawImage(bwImg, {

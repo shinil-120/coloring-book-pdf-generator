@@ -946,6 +946,17 @@ export function Generator() {
           itemNames: successItems,
         }),
       });
+
+      // Handle non-JSON responses (Vercel timeout returns HTML error page)
+      const contentType = res.headers.get("content-type") || "";
+      if (!contentType.includes("application/json")) {
+        throw new Error(
+          `Server returned ${contentType || "non-JSON"} (HTTP ${res.status}). ` +
+          `This usually means the PDF assembly timed out (60s Vercel limit). ` +
+          `Try fewer pages, or split into multiple smaller books.`
+        );
+      }
+
       const data = await res.json();
       if (!res.ok || !data.success) {
         throw new Error(data?.error || `HTTP ${res.status}`);

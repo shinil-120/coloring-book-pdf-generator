@@ -34,10 +34,11 @@ export async function cleanBwImageBuffer(
   const threshold = options.threshold ?? 100;
   const erodePercent = options.erodePercent ?? 30;
 
-  // Use 2048×2048 for print-quality output (300+ DPI at 5.28" page size).
+  // Use 1600×1600 for print-quality output (300 DPI at 5.28" page size).
   // The previous 1024×1024 only gave ~194 DPI — blurry when zoomed.
-  // 2048×2048 gives ~388 DPI — crisp even at 2x zoom.
-  const RES = 2048;
+  // 1600×1600 gives 300 DPI (print standard) and processes fast enough
+  // to stay within Vercel's 60s timeout for up to ~10 images per batch.
+  const RES = 1600;
 
   const { data, info } = await sharp(input)
     .greyscale()
@@ -128,11 +129,11 @@ export async function colorizeImageBuffer(
   const maxSize = options.maxSize ?? 4000000; // increased for 2048×2048 images
   const closeGaps = options.closeGaps ?? 4;
 
-  // Use 2000×2000 (on 2048×2048 canvas) for print quality — matches the
+  // Use 1550×1550 (on 1600×1600 canvas) for print quality — matches the
   // cleanBwImageBuffer resolution so there's no downscaling.
-  const INNER = 2000;
-  const PAD = 24;
-  const CANVAS = INNER + PAD * 2; // 2048
+  const INNER = 1550;
+  const PAD = 25;
+  const CANVAS = INNER + PAD * 2; // 1600
 
   // Resize to INNER×INNER then extend onto a CANVAS×CANVAS WHITE canvas.
   const resized = await sharp(bwBuffer)
