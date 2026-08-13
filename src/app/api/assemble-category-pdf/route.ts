@@ -125,7 +125,10 @@ export async function POST(req: NextRequest) {
 
       const extExists = await externalColoringPageExists(categorySlug, itemName);
       if (extExists.exists && extExists.sizeBytes >= 5 * 1024 && extExists.url) {
-        tasks.push({ url: extExists.url, label: `${itemName} (2)`, itemName });
+        // Use the SAME label as the API image — no "(2)" suffix.
+        // The user wants clean names in the PDF. If both API and external
+        // images exist, they'll both be included with the same item name.
+        tasks.push({ url: extExists.url, label: itemName, itemName });
       }
 
       if (!apiExists.exists && !extExists.exists) {
@@ -160,7 +163,7 @@ export async function POST(req: NextRequest) {
         // 666 DPI — way more than needed. This is ~4x faster than 1600px.
         const colorFull = await colorizeImageBuffer(cleanedBw, palette, { resolution: 800 });
         const colorThumb = await sharp(colorFull)
-          .resize(384, 384, { fit: "cover", kernel: "lanczos3" })
+          .resize(384, 384, { fit: "contain", background: { r: 255, g: 255, b: 255 }, kernel: "lanczos3" })
           .png({ quality: 85, compressionLevel: 6 })
           .toBuffer();
 

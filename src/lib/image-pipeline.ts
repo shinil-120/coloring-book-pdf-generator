@@ -40,10 +40,13 @@ export async function cleanBwImageBuffer(
   // to stay within Vercel's 60s timeout for up to ~10 images per batch.
   const RES = 1600;
 
+  // Use "contain" (not "cover") to preserve the FULL image without cropping.
+  // "cover" crops to fill the square — cuts off parts of the subject.
+  // "contain" fits the entire image with white padding if needed.
   const { data, info } = await sharp(input)
     .greyscale()
     .flatten({ background: { r: 255, g: 255, b: 255 } })
-    .resize(RES, RES, { fit: "cover", kernel: "lanczos3" })
+    .resize(RES, RES, { fit: "contain", background: { r: 255, g: 255, b: 255 }, kernel: "lanczos3" })
     .raw()
     .toBuffer({ resolveWithObject: true });
 
@@ -135,9 +138,10 @@ export async function colorizeImageBuffer(
   const PAD = Math.round(INNER * 0.016); // proportional padding
   const CANVAS = INNER + PAD * 2;
 
-  // Resize to INNER×INNER then extend onto a CANVAS×CANVAS WHITE canvas.
+  // Resize to INNER×INNER using "contain" (no cropping) then extend onto
+  // a CANVAS×CANVAS WHITE canvas. "contain" preserves the full image.
   const resized = await sharp(bwBuffer)
-    .resize(INNER, INNER, { fit: "cover", kernel: "lanczos3" })
+    .resize(INNER, INNER, { fit: "contain", background: { r: 255, g: 255, b: 255 }, kernel: "lanczos3" })
     .flatten({ background: { r: 255, g: 255, b: 255 } })
     .raw()
     .toBuffer();
