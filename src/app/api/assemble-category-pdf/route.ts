@@ -22,7 +22,7 @@ import sharp from "sharp";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const maxDuration = 60; // Vercel Pro limit — assembling 100 pages of images can take a while
+export const maxDuration = 120; // Vercel Pro allows up to 300s; Hobby caps at 60s
 
 // ─────────────────────────────────────────────────────────────────────────
 // Constants
@@ -125,9 +125,6 @@ export async function POST(req: NextRequest) {
 
       const extExists = await externalColoringPageExists(categorySlug, itemName);
       if (extExists.exists && extExists.sizeBytes >= 5 * 1024 && extExists.url) {
-        // Use the SAME label as the API image — no "(2)" suffix.
-        // The user wants clean names in the PDF. If both API and external
-        // images exist, they'll both be included with the same item name.
         tasks.push({ url: extExists.url, label: itemName, itemName });
       }
 
@@ -137,8 +134,19 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Process tasks in parallel batches of 3
-    const CONCURRENCY = 3;
+    // ── Dynamic resolution based on page count ────────────────────────
+    // More pages = lower resolution to stay within Vercel's timeout.
+    // This is a tradeoff between quality and speed:
+    //   ≤ 10 pages:  1600px (300 DPI — print standard)
+    //   11-20 pages: 1200px (227 DPI — good quality)
+    //   21+ pages:   1024px (194 DPI — acceptable for digital use)
+    const totalTasks = tasks.length;
+    const bwResolution = totalTasks > 20 ? 1024 : totalTasks > 10 ? 1200 : 1600;
+    const colorResolution = totalTasks > 20 ? 512 : totalTasks > 10 ? 640 : 800;
+    console.log(`[/api/assemble-category-pdf] ${totalTasks} pages, B&W res=${bwResolution}, color res=${colorResolution}`);
+
+    // Process tasks in parallel batches of 4 (increased from 3 for speed)
+    const CONCURRENCY = 4;
     const processOne = async (task: ProcessTask) => {
       try {
         const rawBw = await readFile(task.url);
@@ -155,13 +163,11 @@ export async function POST(req: NextRequest) {
             : getThemePalette(category.themeColor);
         }
 
-        // Clean B&W ONCE — reuse for both colorize input AND PDF embed
-        const cleanedBw = await cleanBwImageBuffer(rawBw);
+        // Clean B&W ONCE at dynamic resolution — reuse for PDF embed
+        const cleanedBw = await cleanBwImageBuffer(rawBw, { resolution: bwResolution });
 
-        // Colorize at LOW resolution (800×800) since it's only used
-        // as an 86pt thumbnail. At 300 DPI, 86pt = 358px, so 800px gives
-        // 666 DPI — way more than needed. This is ~4x faster than 1600px.
-        const colorFull = await colorizeImageBuffer(cleanedBw, palette, { resolution: 800 });
+        // Colorize at lower resolution (only used for 86pt thumbnail)
+        const colorFull = await colorizeImageBuffer(cleanedBw, palette, { resolution: colorResolution });
         const colorThumb = await sharp(colorFull)
           .resize(384, 384, { fit: "contain", background: { r: 255, g: 255, b: 255 }, kernel: "lanczos3" })
           .png({ quality: 85, compressionLevel: 6 })

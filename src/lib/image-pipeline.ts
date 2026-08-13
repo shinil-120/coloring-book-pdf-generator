@@ -29,16 +29,16 @@ import type { Palette, RGB } from "./coloring-data";
  */
 export async function cleanBwImageBuffer(
   input: Buffer,
-  options: { threshold?: number; erodePercent?: number } = {}
+  options: { threshold?: number; erodePercent?: number; resolution?: number } = {}
 ): Promise<Buffer> {
   const threshold = options.threshold ?? 100;
   const erodePercent = options.erodePercent ?? 30;
 
-  // Use 1600×1600 for print-quality output (300 DPI at 5.28" page size).
-  // The previous 1024×1024 only gave ~194 DPI — blurry when zoomed.
-  // 1600×1600 gives 300 DPI (print standard) and processes fast enough
-  // to stay within Vercel's 60s timeout for up to ~10 images per batch.
-  const RES = 1600;
+  // Dynamic resolution — lower for larger page counts to avoid timeouts.
+  // 1600px = 300 DPI (print standard), suitable for ≤10 pages.
+  // 1200px = 227 DPI (good), suitable for 11-20 pages.
+  // 1024px = 194 DPI (acceptable), suitable for 21+ pages.
+  const RES = options.resolution ?? 1600;
 
   // Use "contain" (not "cover") to preserve the FULL image without cropping.
   // "cover" crops to fill the square — cuts off parts of the subject.
