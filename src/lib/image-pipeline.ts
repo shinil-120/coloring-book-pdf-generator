@@ -34,10 +34,15 @@ export async function cleanBwImageBuffer(
   const threshold = options.threshold ?? 100;
   const erodePercent = options.erodePercent ?? 30;
 
+  // Use 2048×2048 for print-quality output (300+ DPI at 5.28" page size).
+  // The previous 1024×1024 only gave ~194 DPI — blurry when zoomed.
+  // 2048×2048 gives ~388 DPI — crisp even at 2x zoom.
+  const RES = 2048;
+
   const { data, info } = await sharp(input)
     .greyscale()
     .flatten({ background: { r: 255, g: 255, b: 255 } })
-    .resize(1024, 1024, { fit: "cover" })
+    .resize(RES, RES, { fit: "cover", kernel: "lanczos3" })
     .raw()
     .toBuffer({ resolveWithObject: true });
 
@@ -120,23 +125,29 @@ export async function colorizeImageBuffer(
 ): Promise<Buffer> {
   const whiteThreshold = options.whiteThreshold ?? 200;
   const minSize = options.minSize ?? 1;
-  const maxSize = options.maxSize ?? 1000000;
+  const maxSize = options.maxSize ?? 4000000; // increased for 2048×2048 images
   const closeGaps = options.closeGaps ?? 4;
 
-  // Resize to 1000×1000 then extend onto a 1024×1024 WHITE canvas (12px border).
+  // Use 2000×2000 (on 2048×2048 canvas) for print quality — matches the
+  // cleanBwImageBuffer resolution so there's no downscaling.
+  const INNER = 2000;
+  const PAD = 24;
+  const CANVAS = INNER + PAD * 2; // 2048
+
+  // Resize to INNER×INNER then extend onto a CANVAS×CANVAS WHITE canvas.
   const resized = await sharp(bwBuffer)
-    .resize(1000, 1000, { fit: "cover" })
+    .resize(INNER, INNER, { fit: "cover", kernel: "lanczos3" })
     .flatten({ background: { r: 255, g: 255, b: 255 } })
     .raw()
     .toBuffer();
   const { data: canvasData, info: canvasInfo } = await sharp(resized, {
-    raw: { width: 1000, height: 1000, channels: 3 },
+    raw: { width: INNER, height: INNER, channels: 3 },
   })
     .extend({
-      top: 12,
-      bottom: 12,
-      left: 12,
-      right: 12,
+      top: PAD,
+      bottom: PAD,
+      left: PAD,
+      right: PAD,
       background: { r: 255, g: 255, b: 255 },
     })
     .raw()

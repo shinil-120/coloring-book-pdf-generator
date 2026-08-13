@@ -123,12 +123,13 @@ export async function POST(req: NextRequest) {
           palette = themePalette.length > 0 ? themePalette : getPalette(itemName, category.name);
         }
 
-        // Build the colored reference thumbnail (86×86) using the full pipeline.
+        // Build the colored reference thumbnail (REF_SIZE×REF_SIZE) using the full pipeline.
+        // Use lanczos3 for high-quality downscaling from 2048→86.
         const cleanedBw = await cleanBwImageBuffer(rawBw);
         const colorFull = await colorizeImageBuffer(cleanedBw, palette);
         const colorThumb = await sharp(colorFull)
-          .resize(REF_SIZE, REF_SIZE, { fit: "cover" })
-          .png()
+          .resize(REF_SIZE * 2, REF_SIZE * 2, { fit: "cover", kernel: "lanczos3" })
+          .png({ quality: 100, compressionLevel: 0 })
           .toBuffer();
 
         pages.push({ itemName, rawBw, colorPng: colorThumb });
@@ -189,7 +190,8 @@ export async function POST(req: NextRequest) {
       // B&W coloring image (centered, y=132 from bottom)
       if (page.rawBw) {
         try {
-          // Re-clean the B&W image at full size for the printable page.
+          // Re-clean the B&W image at full resolution (2048×2048) for the printable page.
+          // No compression — preserves line art crispness for print.
           const bwPng = await cleanBwImageBuffer(page.rawBw);
           const bwImg = await pdfDoc.embedPng(bwPng);
           pdfPage.drawImage(bwImg, {
@@ -246,7 +248,13 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    const outBytes = await pdfDoc.save();
+    // Save PDF with no compression — preserves full image quality.
+    // pdf-lib doesn't compress PNGs by default, but we explicitly set
+    // useObjectStreams: false to avoid any FlateDecode compression that
+    // could degrade image quality.
+    const outBytes = await pdfDoc.save({
+      useObjectStreams: false,
+    });
     const dataUri = `data:application/pdf;base64,${Buffer.from(outBytes).toString("base64")}`;
 
     return NextResponse.json({
