@@ -667,6 +667,25 @@ export function Generator() {
     [categoryItems, maxSelectable]
   );
 
+  // Select all items that have an EXISTING image (uploaded OR generated)
+  // — these are FREE (no charge to include in the PDF)
+  const selectReady = useCallback(() => {
+    const ready = categoryItems
+      .filter((i) => externalImages.get(i.name) || generatedImages.get(i.name))
+      .slice(0, maxSelectable)
+      .map((i) => i.name);
+    if (ready.length === 0) {
+      toast.info("No ready images", {
+        description: "Generate or upload images first, then use this button.",
+      });
+      return;
+    }
+    setSelectedItemNames(new Set(ready));
+    toast.success(`Selected ${ready.length} ready image${ready.length === 1 ? "" : "s"}`, {
+      description: "All have existing images — $0.00 to create PDF.",
+    });
+  }, [categoryItems, externalImages, generatedImages, maxSelectable]);
+
   // ─── KDP compliance ───
   const kdpCompliant = useMemo(() => {
     return pageCount >= KDP_MIN_PAGES && pageCount <= KDP_MAX_PAGES;
@@ -1306,6 +1325,18 @@ export function Generator() {
                       className="h-8 rounded-lg border-stone-200 px-2.5 text-[11px] font-bold text-stone-600 hover:bg-stone-50"
                     >
                       Random {Math.min(10, maxSelectable)}
+                    </Button>
+                    {/* Select all items with existing images (uploaded + generated) */}
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      onClick={selectReady}
+                      className="h-8 gap-1 rounded-lg border-emerald-200 px-2.5 text-[11px] font-bold text-emerald-700 hover:bg-emerald-50"
+                      title="Select all items that already have images (free — no charge)"
+                    >
+                      <Check className="h-3 w-3" />
+                      Ready
                     </Button>
                     {/* Bulk upload — opens drag&drop modal for multiple files */}
                     <Button

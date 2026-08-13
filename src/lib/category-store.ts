@@ -284,8 +284,8 @@ export async function listItems(categoryId: string, includeDeleted = false): Pro
   if (!turso) return [];
 
   const sql = includeDeleted
-    ? "SELECT * FROM items WHERE categoryId = ? ORDER BY sortOrder ASC, name ASC"
-    : "SELECT * FROM items WHERE categoryId = ? AND isDeleted = 0 ORDER BY sortOrder ASC, name ASC";
+    ? "SELECT * FROM items WHERE categoryId = ? ORDER BY name ASC"
+    : "SELECT * FROM items WHERE categoryId = ? AND isDeleted = 0 ORDER BY name ASC";
 
   const result = await turso.execute({ sql, args: [categoryId] });
   return result.rows.map((row) => toItem(row as unknown as ItemRow));
