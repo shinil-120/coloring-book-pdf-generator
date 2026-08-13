@@ -36,8 +36,9 @@ interface AssembleBody {
 
 interface ItemPage {
   itemName: string;
-  rawBw: Buffer | null;   // original generated B&W PNG bytes (or null if missing)
-  colorPng: Buffer | null; // 86×86 colored reference thumbnail (or null)
+  rawBw: Buffer | null;       // original generated B&W PNG bytes (or null if missing)
+  cleanedBw: Buffer | null;   // pre-cleaned B&W (reused for PDF embed — no re-cleaning!)
+  colorPng: Buffer | null;    // 86×86 colored reference thumbnail (or null)
 }
 
 /**
@@ -96,73 +97,87 @@ export async function POST(req: NextRequest) {
     const itemsByName = new Map(allItems.map((it) => [it.name, it]));
 
     // ── Build pages: fetch raw B&W, clean, colorize for the reference thumbnail ─
-    // For each item, check BOTH:
-    //   1. API-generated B&W (at coloring-books/{slug}/bw/{item}.png)
-    //   2. Externally uploaded B&W (at coloring-books/{slug}/external/{item}.png)
-    // If BOTH exist, BOTH are included as separate pages (page count increases).
+    // Process images IN PARALLEL (batches of 3) to stay within Vercel's 60s timeout.
+    // Sequential processing of 10+ images at 1600px would take 60-90s → timeout.
+    // Parallel processing with concurrency=3 brings it down to ~20-30s.
+    //
+    // KEY OPTIMIZATION: clean the B&W ONCE and reuse it for both:
+    //   1. Colorization input (for the 86pt reference thumbnail)
+    //   2. PDF embedding (for the 380pt printable coloring page)
+    // Previously we cleaned TWICE (once in processImage, once in the PDF loop)
+    // — that's 50% wasted CPU time.
     const pages: ItemPage[] = [];
     let missingCount = 0;
 
+    // Collect all image URLs to process (API + external)
+    interface ProcessTask {
+      url: string;
+      label: string;
+      itemName: string;
+    }
+    const tasks: ProcessTask[] = [];
+
     for (const itemName of itemNames) {
-      // Helper: process a single B&W image (from API or external) into a page
-      const processImage = async (url: string, label: string) => {
-        try {
-          const rawBw = await readFile(url);
-
-          // Pick palette with this priority:
-          // 1. Per-item palette (if explicitly set in DB — rare)
-          // 2. getPalette() from coloring-data.ts — natural per-item colors
-          // 3. Category theme palette (fallback)
-          const item = itemsByName.get(itemName);
-          let palette: Palette;
-          if (item?.palette && item.palette.length > 0) {
-            palette = item.palette;
-          } else {
-            const naturalPalette = getPalette(itemName, category.name);
-            if (naturalPalette && naturalPalette.length > 0) {
-              palette = naturalPalette;
-            } else {
-              const themePalette = getThemePalette(category.themeColor);
-              palette = themePalette.length > 0 ? themePalette : getPalette(itemName, category.name);
-            }
-          }
-
-          const cleanedBw = await cleanBwImageBuffer(rawBw);
-          const colorFull = await colorizeImageBuffer(cleanedBw, palette);
-          // Colored reference thumbnail is only displayed at 86pt (1.2 inches).
-          // At 300 DPI, that's 360px — so 512px is plenty. No need for 2048px
-          // here (which would cause Vercel timeouts). The B&W printable image
-          // is the one that needs high resolution (handled separately below).
-          const colorThumb = await sharp(colorFull)
-            .resize(512, 512, { fit: "cover", kernel: "lanczos3" })
-            .png({ quality: 90, compressionLevel: 6 })
-            .toBuffer();
-
-          pages.push({ itemName: label, rawBw, colorPng: colorThumb });
-        } catch (err) {
-          console.error(`[/api/assemble-category-pdf] item "${label}" failed:`, err);
-          missingCount++;
-          pages.push({ itemName: label, rawBw: null, colorPng: null });
-        }
-      };
-
-      // 1. Check API-generated image
       const apiExists = await coloringPageExists(categorySlug, itemName);
       if (apiExists.exists && apiExists.sizeBytes >= 5 * 1024 && apiExists.url) {
-        await processImage(apiExists.url, itemName);
+        tasks.push({ url: apiExists.url, label: itemName, itemName });
       }
 
-      // 2. Check externally uploaded image (additional — doesn't replace API)
       const extExists = await externalColoringPageExists(categorySlug, itemName);
       if (extExists.exists && extExists.sizeBytes >= 5 * 1024 && extExists.url) {
-        // Label external images with "(2)" suffix so the user can distinguish
-        await processImage(extExists.url, `${itemName} (2)`);
+        tasks.push({ url: extExists.url, label: `${itemName} (2)`, itemName });
       }
 
-      // If neither API nor external exists, mark as missing
       if (!apiExists.exists && !extExists.exists) {
         missingCount++;
-        pages.push({ itemName, rawBw: null, colorPng: null });
+        pages.push({ itemName, rawBw: null, cleanedBw: null, colorPng: null });
+      }
+    }
+
+    // Process tasks in parallel batches of 3
+    const CONCURRENCY = 3;
+    const processOne = async (task: ProcessTask) => {
+      try {
+        const rawBw = await readFile(task.url);
+
+        // Pick palette
+        const item = itemsByName.get(task.itemName);
+        let palette: Palette;
+        if (item?.palette && item.palette.length > 0) {
+          palette = item.palette;
+        } else {
+          const naturalPalette = getPalette(task.itemName, category.name);
+          palette = (naturalPalette && naturalPalette.length > 0)
+            ? naturalPalette
+            : getThemePalette(category.themeColor);
+        }
+
+        // Clean B&W ONCE — reuse for both colorize input AND PDF embed
+        const cleanedBw = await cleanBwImageBuffer(rawBw);
+
+        // Colorize at LOW resolution (800×800) since it's only used
+        // as an 86pt thumbnail. At 300 DPI, 86pt = 358px, so 800px gives
+        // 666 DPI — way more than needed. This is ~4x faster than 1600px.
+        const colorFull = await colorizeImageBuffer(cleanedBw, palette, { resolution: 800 });
+        const colorThumb = await sharp(colorFull)
+          .resize(384, 384, { fit: "cover", kernel: "lanczos3" })
+          .png({ quality: 85, compressionLevel: 6 })
+          .toBuffer();
+
+        return { itemName: task.label, rawBw, cleanedBw, colorPng: colorThumb };
+      } catch (err) {
+        console.error(`[/api/assemble-category-pdf] item "${task.label}" failed:`, err);
+        return { itemName: task.label, rawBw: null, cleanedBw: null, colorPng: null };
+      }
+    };
+
+    // Process in parallel batches
+    for (let i = 0; i < tasks.length; i += CONCURRENCY) {
+      const batch = tasks.slice(i, i + CONCURRENCY);
+      const results = await Promise.all(batch.map(processOne));
+      for (const r of results) {
+        if (!r.cleanedBw) missingCount++;
+        pages.push(r);
       }
     }
 
@@ -220,14 +235,11 @@ export async function POST(req: NextRequest) {
       }
 
       // B&W coloring image (centered, y=132 from bottom)
-      if (page.rawBw) {
+      if (page.cleanedBw) {
         try {
-          // Clean the B&W image at 1600×1600 (300 DPI at 5.28" page size).
-          // We use 1600 instead of 2048 to avoid Vercel's 60s timeout —
-          // 1600px is still 300 DPI which is print-quality, and processes
-          // ~40% faster than 2048px.
-          const bwPng = await cleanBwImageBuffer(page.rawBw);
-          const bwImg = await pdfDoc.embedPng(bwPng);
+          // Use the PRE-CLEANED B&W (already at 1600×1600 from processOne).
+          // No need to re-clean — saves ~3s per page.
+          const bwImg = await pdfDoc.embedPng(page.cleanedBw);
           pdfPage.drawImage(bwImg, {
             x: BW_X,
             y: PAGE_HEIGHT - BW_Y - BW_SIZE,

@@ -122,18 +122,18 @@ interface Region {
 export async function colorizeImageBuffer(
   bwBuffer: Buffer,
   palette: Palette,
-  options: { whiteThreshold?: number; minSize?: number; maxSize?: number; closeGaps?: number } = {}
+  options: { whiteThreshold?: number; minSize?: number; maxSize?: number; closeGaps?: number; resolution?: number } = {}
 ): Promise<Buffer> {
   const whiteThreshold = options.whiteThreshold ?? 200;
   const minSize = options.minSize ?? 1;
-  const maxSize = options.maxSize ?? 4000000; // increased for 2048×2048 images
+  const maxSize = options.maxSize ?? 4000000;
   const closeGaps = options.closeGaps ?? 4;
 
-  // Use 1550×1550 (on 1600×1600 canvas) for print quality — matches the
-  // cleanBwImageBuffer resolution so there's no downscaling.
-  const INNER = 1550;
-  const PAD = 25;
-  const CANVAS = INNER + PAD * 2; // 1600
+  // Resolution can be overridden — lower = faster. Default is 800 for
+  // PDF thumbnails (only displayed at 86pt). Use 1600 for full-quality.
+  const INNER = options.resolution ?? 800;
+  const PAD = Math.round(INNER * 0.016); // proportional padding
+  const CANVAS = INNER + PAD * 2;
 
   // Resize to INNER×INNER then extend onto a CANVAS×CANVAS WHITE canvas.
   const resized = await sharp(bwBuffer)
