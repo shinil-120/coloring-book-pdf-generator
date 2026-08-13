@@ -237,3 +237,60 @@ nextjs-portal {
 .dragging-cursor * {
   cursor: grabbing !important;
 }
+
+/* ────────────────────────────────────────────────────────────────────────
+   Mobile responsive fixes — prevent horizontal overflow on small screens.
+   ──────────────────────────────────────────────────────────────────────── */
+
+/* Prevent horizontal scroll on the body — everything must fit within viewport */
+html, body {
+  overflow-x: hidden;
+  max-width: 100vw;
+}
+
+/* Tab list: allow horizontal scroll on mobile, wrap on desktop */
+@media (max-width: 640px) {
+  [role="tablist"] {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+  [role="tablist"]::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+/* Dialog content: full width on mobile with safe-area padding */
+@media (max-width: 640px) {
+  [role="dialog"] {
+    max-width: calc(100vw - 1rem) !important;
+    margin: 0 auto;
+  }
+}
+
+/* Long text: prevent overflow in flex containers */
+.min-w-0 {
+  min-width: 0;
+}
+
+/* Touch targets: minimum 36px on mobile (was 44px — slightly smaller to fit more buttons) */
+@media (max-width: 640px) {
+  button, a, [role="button"], [role="tab"] {
+    min-height: 36px;
+  }
+}
+
+/* Prevent text selection on button taps (mobile UX) */
+@media (max-width: 640px) {
+  button {
+    -webkit-tap-highlight-color: transparent;
+    user-select: none;
+  }
+}
+
+/* Safe area insets for iOS devices */
+@supports (padding: env(safe-area-inset-bottom)) {
+  footer {
+    padding-bottom: max(0.75rem, env(safe-area-inset-bottom));
+  }
+}

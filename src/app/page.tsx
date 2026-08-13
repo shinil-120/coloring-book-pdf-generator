@@ -25,8 +25,8 @@ export default function Home() {
                 </span>
               </div>
               <div className="leading-tight">
-                <h1 className="text-base font-extrabold tracking-tight text-stone-800 sm:text-lg">
-                  Coloring Book PDF Generator
+                <h1 className="text-sm font-extrabold tracking-tight text-stone-800 sm:text-base lg:text-lg">
+                  Coloring Book Studio
                 </h1>
                 <p className="hidden text-[11px] font-medium text-stone-500 sm:block">
                   Amazon KDP-ready PDFs from AI-generated images
@@ -51,35 +51,35 @@ export default function Home() {
       <main className="flex-1">
         <div className="mx-auto max-w-7xl px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
           <Tabs value={tab} onValueChange={setTab} className="w-full">
-            <div className="mb-6 flex flex-col items-start gap-3 sm:flex-row sm:items-center sm:justify-between">
-              <TabsList className="h-12 w-full gap-1 rounded-2xl border border-rose-100 bg-white p-1.5 shadow-sm sm:w-auto sm:flex-wrap">
+            <div className="mb-6 flex flex-col items-start gap-3">
+              <TabsList className="h-auto w-full gap-1 overflow-x-auto rounded-2xl border border-rose-100 bg-white p-1.5 shadow-sm sm:w-auto sm:flex-wrap sm:overflow-visible">
                 <TabsTrigger
                   value="books"
-                  className="h-9 gap-2 rounded-xl px-3 text-xs font-bold text-stone-600 data-[state=active]:bg-gradient-to-r data-[state=active]:from-pink-500 data-[state=active]:to-rose-500 data-[state=active]:text-white data-[state=active]:shadow-md sm:px-4 sm:text-sm"
+                  className="h-9 shrink-0 gap-1.5 rounded-xl px-2.5 text-xs font-bold text-stone-600 data-[state=active]:bg-gradient-to-r data-[state=active]:from-pink-500 data-[state=active]:to-rose-500 data-[state=active]:text-white data-[state=active]:shadow-md sm:gap-2 sm:px-4 sm:text-sm"
                 >
-                  <Palette className="h-4 w-4" />
-                  Coloring Book PDF
+                  <Palette className="h-4 w-4 shrink-0" />
+                  <span className="whitespace-nowrap">Books</span>
                 </TabsTrigger>
                 <TabsTrigger
                   value="editor"
-                  className="h-9 gap-2 rounded-xl px-3 text-xs font-bold text-stone-600 data-[state=active]:bg-gradient-to-r data-[state=active]:from-violet-500 data-[state=active]:to-purple-500 data-[state=active]:text-white data-[state=active]:shadow-md sm:px-4 sm:text-sm"
+                  className="h-9 shrink-0 gap-1.5 rounded-xl px-2.5 text-xs font-bold text-stone-600 data-[state=active]:bg-gradient-to-r data-[state=active]:from-violet-500 data-[state=active]:to-purple-500 data-[state=active]:text-white data-[state=active]:shadow-md sm:gap-2 sm:px-4 sm:text-sm"
                 >
-                  <FileText className="h-4 w-4" />
-                  Edit PDF
+                  <FileText className="h-4 w-4 shrink-0" />
+                  <span className="whitespace-nowrap">Edit PDF</span>
                 </TabsTrigger>
                 <TabsTrigger
                   value="generator"
-                  className="h-9 gap-2 rounded-xl px-3 text-xs font-bold text-stone-600 data-[state=active]:bg-gradient-to-r data-[state=active]:from-amber-500 data-[state=active]:to-orange-500 data-[state=active]:text-white data-[state=active]:shadow-md sm:px-4 sm:text-sm"
+                  className="h-9 shrink-0 gap-1.5 rounded-xl px-2.5 text-xs font-bold text-stone-600 data-[state=active]:bg-gradient-to-r data-[state=active]:from-amber-500 data-[state=active]:to-orange-500 data-[state=active]:text-white data-[state=active]:shadow-md sm:gap-2 sm:px-4 sm:text-sm"
                 >
-                  <Zap className="h-4 w-4" />
-                  Generator
+                  <Zap className="h-4 w-4 shrink-0" />
+                  <span className="whitespace-nowrap">Generator</span>
                 </TabsTrigger>
                 <TabsTrigger
                   value="image-gen"
-                  className="h-9 gap-2 rounded-xl px-3 text-xs font-bold text-stone-600 data-[state=active]:bg-gradient-to-r data-[state=active]:from-amber-500 data-[state=active]:to-orange-500 data-[state=active]:text-white data-[state=active]:shadow-md sm:px-4 sm:text-sm"
+                  className="h-9 shrink-0 gap-1.5 rounded-xl px-2.5 text-xs font-bold text-stone-600 data-[state=active]:bg-gradient-to-r data-[state=active]:from-amber-500 data-[state=active]:to-orange-500 data-[state=active]:text-white data-[state=active]:shadow-md sm:gap-2 sm:px-4 sm:text-sm"
                 >
-                  <Wand2 className="h-4 w-4" />
-                  AI Image Gen
+                  <Wand2 className="h-4 w-4 shrink-0" />
+                  <span className="whitespace-nowrap">AI Image</span>
                 </TabsTrigger>
               </TabsList>
 

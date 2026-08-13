@@ -1070,7 +1070,7 @@ export function Generator() {
   // ─── Render ───
   return (
     <TooltipProvider delayDuration={300}>
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)]">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.05fr)] lg:gap-6">
         {/* ══════════════════ LEFT: Controls ══════════════════ */}
         <motion.div
           initial={{ opacity: 0, y: 12 }}
@@ -1079,24 +1079,24 @@ export function Generator() {
           className="space-y-5"
         >
           {/* Hero */}
-          <div className="relative overflow-hidden rounded-3xl border border-amber-200/70 bg-gradient-to-br from-amber-50 via-orange-50 to-rose-50 p-5 shadow-sm sm:p-6">
+          <div className="relative overflow-hidden rounded-3xl border border-amber-200/70 bg-gradient-to-br from-amber-50 via-orange-50 to-rose-50 p-4 shadow-sm sm:p-6">
             <div className="absolute -right-8 -top-8 h-32 w-32 rounded-full bg-gradient-to-br from-orange-200/40 to-rose-200/40 blur-2xl" />
-            <div className="relative flex items-start gap-4">
-              <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-400 via-rose-400 to-pink-500 shadow-lg shadow-rose-200">
-                <Wand2 className="h-6 w-6 text-white" strokeWidth={2.2} />
+            <div className="relative flex items-start gap-3 sm:gap-4">
+              <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-2xl bg-gradient-to-br from-orange-400 via-rose-400 to-pink-500 shadow-lg shadow-rose-200 sm:h-12 sm:w-12">
+                <Wand2 className="h-5 w-5 text-white sm:h-6 sm:w-6" strokeWidth={2.2} />
               </div>
               <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <h2 className="text-lg font-extrabold tracking-tight text-stone-800 sm:text-xl">
+                <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-2">
+                  <h2 className="text-base font-extrabold tracking-tight text-stone-800 sm:text-lg lg:text-xl">
                     Generate coloring books
                   </h2>
-                  <div className="flex gap-1">
+                  <div className="flex flex-wrap gap-1">
                     <Button
                       type="button"
                       size="sm"
                       variant="outline"
                       onClick={() => setManageCategoriesOpen(true)}
-                      className="h-8 gap-1.5 rounded-full border-amber-200 bg-white/80 px-3 text-[11px] font-bold text-amber-700 hover:bg-amber-50"
+                      className="h-7 gap-1 rounded-full border-amber-200 bg-white/80 px-2.5 text-[10px] font-bold text-amber-700 hover:bg-amber-50 sm:h-8 sm:px-3 sm:text-[11px]"
                     >
                       <Settings2 className="h-3 w-3" /> Categories
                     </Button>
@@ -1105,7 +1105,7 @@ export function Generator() {
                       size="sm"
                       variant="outline"
                       onClick={() => setManageProvidersOpen(true)}
-                      className="h-8 gap-1.5 rounded-full border-rose-200 bg-white/80 px-3 text-[11px] font-bold text-rose-700 hover:bg-rose-50"
+                      className="h-7 gap-1 rounded-full border-rose-200 bg-white/80 px-2.5 text-[10px] font-bold text-rose-700 hover:bg-rose-50 sm:h-8 sm:px-3 sm:text-[11px]"
                     >
                       <ShieldCheck className="h-3 w-3" /> Providers
                     </Button>
@@ -1114,7 +1114,7 @@ export function Generator() {
                       size="sm"
                       variant="outline"
                       onClick={() => setHistoryOpen(true)}
-                      className="h-8 gap-1.5 rounded-full border-violet-200 bg-white/80 px-3 text-[11px] font-bold text-violet-700 hover:bg-violet-50"
+                      className="h-7 gap-1 rounded-full border-violet-200 bg-white/80 px-2.5 text-[10px] font-bold text-violet-700 hover:bg-violet-50 sm:h-8 sm:px-3 sm:text-[11px]"
                     >
                       <History className="h-3 w-3" /> History
                       {history.length > 0 && (
@@ -1125,19 +1125,19 @@ export function Generator() {
                     </Button>
                   </div>
                 </div>
-                <p className="mt-1 text-sm leading-snug text-stone-600">
+                <p className="mt-1 text-xs leading-snug text-stone-600 sm:text-sm">
                   Multi-provider AI failover across OpenAI, Z.AI, DeepInfra,
                   fal.ai, Together, Replicate &amp; Cloudflare.
                 </p>
                 <div className="mt-2 flex flex-wrap gap-1.5">
-                  <Badge variant="secondary" className="bg-white/70 text-[11px] text-amber-700 hover:bg-white/70">
-                    <Sparkles className="mr-1 h-3 w-3" /> Multi-provider failover
+                  <Badge variant="secondary" className="bg-white/70 text-[10px] text-amber-700 hover:bg-white/70 sm:text-[11px]">
+                    <Sparkles className="mr-1 h-3 w-3" /> Failover
                   </Badge>
-                  <Badge variant="secondary" className="bg-white/70 text-[11px] text-rose-700 hover:bg-white/70">
+                  <Badge variant="secondary" className="bg-white/70 text-[10px] text-rose-700 hover:bg-white/70 sm:text-[11px]">
                     <Layers className="mr-1 h-3 w-3" /> {categories.length || "—"} categories
                   </Badge>
-                  <Badge variant="secondary" className="bg-white/70 text-[11px] text-orange-700 hover:bg-white/70">
-                    <DollarSign className="mr-1 h-3 w-3" /> $0.003/image from $5
+                  <Badge variant="secondary" className="bg-white/70 text-[10px] text-orange-700 hover:bg-white/70 sm:text-[11px]">
+                    <DollarSign className="mr-1 h-3 w-3" /> $0.003/img
                   </Badge>
                 </div>
               </div>
@@ -1307,13 +1307,13 @@ export function Generator() {
               ) : (
                 <>
                   {/* Quick actions */}
-                  <div className="mb-3 flex flex-wrap gap-1.5">
+                  <div className="mb-3 flex flex-wrap gap-1">
                     <Button
                       type="button"
                       size="sm"
                       variant="outline"
                       onClick={selectAll}
-                      className="h-8 rounded-lg border-stone-200 px-2.5 text-[11px] font-bold text-stone-600 hover:bg-stone-50"
+                      className="h-7 rounded-lg border-stone-200 px-2 text-[10px] font-bold text-stone-600 hover:bg-stone-50 sm:h-8 sm:px-2.5 sm:text-[11px]"
                     >
                       <Check className="mr-1 h-3 w-3" /> All
                     </Button>
@@ -1322,7 +1322,7 @@ export function Generator() {
                       size="sm"
                       variant="outline"
                       onClick={selectNone}
-                      className="h-8 rounded-lg border-stone-200 px-2.5 text-[11px] font-bold text-stone-600 hover:bg-stone-50"
+                      className="h-7 rounded-lg border-stone-200 px-2 text-[10px] font-bold text-stone-600 hover:bg-stone-50 sm:h-8 sm:px-2.5 sm:text-[11px]"
                     >
                       None
                     </Button>
@@ -1331,7 +1331,7 @@ export function Generator() {
                       size="sm"
                       variant="outline"
                       onClick={() => selectFirstN(Math.min(10, maxSelectable))}
-                      className="h-8 rounded-lg border-stone-200 px-2.5 text-[11px] font-bold text-stone-600 hover:bg-stone-50"
+                      className="h-7 rounded-lg border-stone-200 px-2 text-[10px] font-bold text-stone-600 hover:bg-stone-50 sm:h-8 sm:px-2.5 sm:text-[11px]"
                     >
                       First {Math.min(10, maxSelectable)}
                     </Button>
@@ -1340,45 +1340,42 @@ export function Generator() {
                       size="sm"
                       variant="outline"
                       onClick={() => selectRandomN(Math.min(10, maxSelectable))}
-                      className="h-8 rounded-lg border-stone-200 px-2.5 text-[11px] font-bold text-stone-600 hover:bg-stone-50"
+                      className="h-7 rounded-lg border-stone-200 px-2 text-[10px] font-bold text-stone-600 hover:bg-stone-50 sm:h-8 sm:px-2.5 sm:text-[11px]"
                     >
                       Random {Math.min(10, maxSelectable)}
                     </Button>
-                    {/* Select all items with existing images (uploaded + generated) */}
                     <Button
                       type="button"
                       size="sm"
                       variant="outline"
                       onClick={selectReady}
-                      className="h-8 gap-1 rounded-lg border-emerald-200 px-2.5 text-[11px] font-bold text-emerald-700 hover:bg-emerald-50"
+                      className="h-7 gap-1 rounded-lg border-emerald-200 px-2 text-[10px] font-bold text-emerald-700 hover:bg-emerald-50 sm:h-8 sm:px-2.5 sm:text-[11px]"
                       title="Select all items that already have images (free — no charge)"
                     >
                       <Check className="h-3 w-3" />
                       Ready
                     </Button>
-                    {/* Select all items WITHOUT images (need generation/upload) */}
                     <Button
                       type="button"
                       size="sm"
                       variant="outline"
                       onClick={selectNotReady}
-                      className="h-8 gap-1 rounded-lg border-amber-200 px-2.5 text-[11px] font-bold text-amber-700 hover:bg-amber-50"
+                      className="h-7 gap-1 rounded-lg border-amber-200 px-2 text-[10px] font-bold text-amber-700 hover:bg-amber-50 sm:h-8 sm:px-2.5 sm:text-[11px]"
                       title="Select all items that don't have images yet"
                     >
                       <AlertTriangle className="h-3 w-3" />
                       To Do
                     </Button>
-                    {/* Bulk upload — opens drag&drop modal for multiple files */}
                     <Button
                       type="button"
                       size="sm"
                       variant="outline"
                       onClick={() => setUploadOpen(true)}
-                      className="h-8 gap-1 rounded-lg border-violet-200 px-2.5 text-[11px] font-bold text-violet-700 hover:bg-violet-50"
+                      className="h-7 gap-1 rounded-lg border-violet-200 px-2 text-[10px] font-bold text-violet-700 hover:bg-violet-50 sm:h-8 sm:px-2.5 sm:text-[11px]"
                       title="Upload multiple images at once (filenames auto-matched to items)"
                     >
                       <Upload className="h-3 w-3" />
-                      Bulk Upload
+                      Bulk
                     </Button>
                   </div>
 
@@ -1548,7 +1545,7 @@ export function Generator() {
             <RadioGroup
               value={quality}
               onValueChange={setQuality}
-              className="grid grid-cols-1 gap-2 sm:grid-cols-3"
+              className="grid grid-cols-1 gap-1.5 sm:grid-cols-3 sm:gap-2"
             >
               {QUALITY_OPTIONS.map((q) => (
                 <label
