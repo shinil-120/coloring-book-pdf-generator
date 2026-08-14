@@ -54,23 +54,8 @@ export async function POST(req: NextRequest) {
     const suggestedPrice = Math.ceil(printingCost * 3);
     const royalty = suggestedPrice - printingCost - (suggestedPrice * 0.6); // 60% to Amazon
 
-    // Use Z.AI to generate SEO content — construct directly with env var
-    // (bypasses ZAI.create() which needs a .z-ai-config file that doesn't
-    // exist on Vercel production)
-    const apiKey = process.env.ZAI_API_KEY;
-    if (!apiKey) {
-      return NextResponse.json(
-        { success: false, error: "ZAI_API_KEY not set. Add it to Vercel env vars to use KDP content generation." },
-        { status: 503 }
-      );
-    }
-    const ZAI = (await import("z-ai-web-dev-sdk")).default;
-    const zai = new ZAI({
-      baseUrl: "https://api.z.ai/api/paas/v4",
-      apiKey,
-    } as any);
-
-    const prompt = `You are an Amazon KDP listing expert with deep knowledge of SEO optimization using tools like Ahrefs and Semrush. Generate the complete KDP listing content for a children's coloring book.
+    // Generate SEO content using AI — try Z.AI first, fall back to OpenAI
+    const promptText = `You are an Amazon KDP listing expert with deep knowledge of SEO optimization using tools like Ahrefs and Semrush. Generate the complete KDP listing content for a children's coloring book.
 
 BOOK DETAILS:
 - Category: ${categoryName}
@@ -96,22 +81,84 @@ Guidelines:
 - Keywords should include both broad terms ('coloring book for kids') and specific terms ('${categoryName.toLowerCase()} coloring book')
 - Consider seasonal search trends and gift-buying intent`;
 
-    const response = await zai.chat.completions.create({
-      model: "glm-4.5",
-      messages: [
-        {
-          role: "system",
-          content: "You are an expert Amazon KDP listing optimizer with deep SEO knowledge. You return ONLY valid JSON, no markdown, no explanations.",
-        },
-        {
-          role: "user",
-          content: prompt,
-        },
-      ],
-      thinking: { type: "disabled" },
-    });
+    const systemPrompt = "You are an expert Amazon KDP listing optimizer with deep SEO knowledge. You return ONLY valid JSON, no markdown, no explanations.";
 
-    const content = response.choices[0]?.message?.content ?? "";
+    let content = "";
+
+    // ── Try Z.AI first (if ZAI_API_KEY is set) ────────────────────────
+    const zaiKey = process.env.ZAI_API_KEY;
+    if (zaiKey) {
+      try {
+        const ZAI = (await import("z-ai-web-dev-sdk")).default;
+        const zai = new ZAI({
+          baseUrl: "https://api.z.ai/api/paas/v4",
+          apiKey: zaiKey,
+        } as any);
+
+        const response = await zai.chat.completions.create({
+          model: "glm-4.5",
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: promptText },
+          ],
+          thinking: { type: "disabled" },
+        });
+        content = response.choices[0]?.message?.content ?? "";
+        console.log("[/api/kdp-content] Z.AI succeeded");
+      } catch (zaiErr) {
+        const msg = zaiErr instanceof Error ? zaiErr.message : String(zaiErr);
+        console.log(`[/api/kdp-content] Z.AI failed: ${msg.slice(0, 100)} — trying OpenAI fallback`);
+      }
+    }
+
+    // ── Fall back to OpenAI (if Z.AI failed or not configured) ────────
+    if (!content) {
+      const openaiKey = process.env.OPENAI_API_KEY;
+      if (!openaiKey) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: "No AI provider available. Z.AI has insufficient balance and OPENAI_API_KEY is not set. Add OpenAI key to Vercel env vars.",
+          },
+          { status: 503 }
+        );
+      }
+
+      try {
+        const res = await fetch("https://api.openai.com/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${openaiKey}`,
+          },
+          body: JSON.stringify({
+            model: "gpt-4o-mini",
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: promptText },
+            ],
+            temperature: 0.7,
+          }),
+        });
+
+        if (!res.ok) {
+          const errText = await res.text();
+          throw new Error(`OpenAI HTTP ${res.status}: ${errText.slice(0, 200)}`);
+        }
+
+        const data = await res.json();
+        content = data.choices[0]?.message?.content ?? "";
+        console.log("[/api/kdp-content] OpenAI succeeded");
+      } catch (openaiErr) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: `Both providers failed. Z.AI: insufficient balance. OpenAI: ${openaiErr instanceof Error ? openaiErr.message : "unknown error"}`,
+          },
+          { status: 500 }
+        );
+      }
+    }
 
     // Parse the JSON from the AI response
     let kdpContent;
